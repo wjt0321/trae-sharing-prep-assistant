@@ -40,16 +40,19 @@
   - 规划逻辑测试
 - `src/styles/globals.css`
   - 全局样式与视觉 token
-- `docs/赛前准备`
+- `project-docs/赛前准备`
   - 历史方案、比赛资料、草稿与提示词归档
-- `docs/项目文档`
+- `project-docs/项目文档`
   - 后续新增的正式项目文档
+- `docs/`
+  - GitHub Pages 静态发布产物，由构建生成
 
 ## 文档规则
 
 - 不要再把新文档直接丢到 `docs` 根目录
-- 新增项目资料统一放到 `docs/项目文档`
-- 历史草稿、赛前分析、旧方案归档到 `docs/赛前准备`
+- 新增项目资料统一放到 `project-docs/项目文档`
+- 历史草稿、赛前分析、旧方案归档到 `project-docs/赛前准备`
+- `docs/` 仅保留构建后的静态站内容
 
 ## 开发原则
 
@@ -97,6 +100,8 @@ npm run build
   - `feat(demo): ...`
   - `docs(project): ...`
   - `fix(ui): ...`
+- 远程仓库：`https://github.com/wjt0321/trae-sharing-prep-assistant`
+- GitHub Pages：`https://wjt0321.github.io/trae-sharing-prep-assistant/`
 
 ## 推荐演示输入
 
