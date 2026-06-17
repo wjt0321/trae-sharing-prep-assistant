@@ -13,6 +13,11 @@
 
 `我要准备一场小型分享会，但我不知道该怎么安排。`
 
+## 在线体验
+
+- Demo：`https://wjt0321.github.io/trae-sharing-prep-assistant/`
+- GitHub：`https://github.com/wjt0321/trae-sharing-prep-assistant`
+
 ## 本地运行
 
 ```bash
