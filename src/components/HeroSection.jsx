@@ -5,14 +5,14 @@ export function HeroSection({ goal, onGoalChange, onUseExample, onSubmit, isLoad
     <section className="animate-rise rounded-panel border border-[rgba(43,41,38,0.1)] bg-surface p-6 shadow-soft sm:p-8 lg:p-10">
       <div className="max-w-3xl">
         <div className="mb-4 inline-flex rounded-full bg-[rgba(201,106,61,0.1)] px-3 py-1 text-xs font-medium text-accent">
-          Demo · 单场景任务拆解工作台
+          聚焦单场景，不做万能助手
         </div>
 
         <h1 className="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-          把分享准备变成行动清单
+          把一场分享会的准备过程，整理成可执行的行动清单
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-secondary sm:text-lg">
-          输入一个分享目标，系统会帮你拆解出准备步骤、执行顺序和最终行动清单。
+          输入一个分享目标，系统会自动拆解筹备阶段、推荐准备顺序，并给出一份可以直接照着做的最终清单。
         </p>
       </div>
 

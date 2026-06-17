@@ -10,9 +10,9 @@ import { defaultGoal } from "./data/demoTemplates";
 import { createPlanFromGoal } from "./lib/planner";
 
 const initialHint = {
-  title: "输入一个分享目标后，这里会出现结构化结果",
+  title: "输入一个分享目标后，这里会出现完整的筹备路径",
   description:
-    "你将看到 4 个筹备阶段、最终行动清单，以及准备重点与容易遗漏的事项。页面更适合截图和录屏，而不是聊天式输出。"
+    "你将看到 4 个准备阶段、最终行动清单，以及准备重点和容易遗漏的事项。重点不是“回答你”，而是帮你把分享准备真正往前推进。"
 };
 
 export default function App() {
@@ -85,7 +85,7 @@ export default function App() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-sm font-medium text-accent">{result.title}</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-ink">根据你的目标生成的准备路径</h2>
+                  <h2 className="mt-2 text-2xl font-semibold text-ink">根据你的目标生成的分享筹备路径</h2>
                 </div>
                 <div className="max-w-xl rounded-[14px] bg-muted px-4 py-3 text-sm leading-6 text-secondary">
                   <p>输入目标：{result.goalEcho}</p>
