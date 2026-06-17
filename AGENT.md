@@ -44,14 +44,14 @@
 - 规划逻辑：`src/lib/planner.js`
 - 测试：`src/lib/planner.test.js`
 - 全局样式：`src/styles/globals.css`
-- 赛前历史资料：`docs/赛前准备`
-- 项目正式资料：`docs/项目文档`
+- 赛前历史资料：`project-docs/赛前准备`
+- 项目正式资料：`project-docs/项目文档`
 
 ## 文档归类规则
 
-- 新生成文档默认放入 `docs/项目文档`
-- 仅当文档属于历史归档、旧草稿、赛前参考材料时，才放入 `docs/赛前准备`
-- `docs` 根目录只保留目录说明文件 `docs/README.md`
+- 新生成文档默认放入 `project-docs/项目文档`
+- 仅当文档属于历史归档、旧草稿、赛前参考材料时，才放入 `project-docs/赛前准备`
+- `docs/` 目录专用于 GitHub Pages 静态发布产物，不存放项目文档
 
 ## 页面修改规则
 

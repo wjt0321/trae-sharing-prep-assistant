@@ -18,6 +18,12 @@
 - Demo：`https://wjt0321.github.io/trae-sharing-prep-assistant/`
 - GitHub：`https://github.com/wjt0321/trae-sharing-prep-assistant`
 
+## 文档位置
+
+- 项目正式文档：`project-docs/项目文档`
+- 赛前归档资料：`project-docs/赛前准备`
+- `docs/`：仅用于 GitHub Pages 静态发布产物
+
 ## 本地运行
 
 ```bash
