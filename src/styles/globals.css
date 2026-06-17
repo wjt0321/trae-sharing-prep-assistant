@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #2b2926;
+  background: #f8f6f1;
+  font-family: "HarmonyOS Sans SC", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at top, rgba(201, 106, 61, 0.08), transparent 30%),
+    #f8f6f1;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+@layer components {
+  .animate-rise {
+    animation: rise 220ms ease-out;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(241, 236, 228, 0.65) 0%,
+      rgba(255, 255, 255, 0.95) 50%,
+      rgba(241, 236, 228, 0.65) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
