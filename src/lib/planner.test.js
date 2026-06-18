@@ -1,5 +1,9 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { createPlan, createPlanFromGoal } from "./planner";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("createPlanFromGoal（兼容入口）", () => {
   test("为分享会目标生成 4 个阶段与最终行动清单", () => {
@@ -168,5 +172,42 @@ describe("createPlan（结构化输入）", () => {
 
     expect(soonResult.rhythmAdvice).toContain("压缩节奏");
     expect(farResult.rhythmAdvice).toContain("多轮预演");
+  });
+
+  test("负时区语义下当天日期不会被误判为已过期", () => {
+    const RealDate = Date;
+
+    class MockDate extends RealDate {
+      constructor(...args) {
+        if (args.length === 0) {
+          super("2026-06-18T12:00:00");
+          return;
+        }
+
+        if (args.length === 1 && args[0] === "2026-06-18") {
+          super("2026-06-17T17:00:00");
+          return;
+        }
+
+        super(...args);
+      }
+
+      static now() {
+        return new RealDate("2026-06-18T12:00:00").getTime();
+      }
+    }
+
+    vi.stubGlobal("Date", MockDate);
+
+    const result = createPlan({
+      topic: "分享",
+      audience: "同事",
+      duration: "30分钟",
+      date: "2026-06-18",
+      goal: "传递信息",
+      preparedness: "还没开始"
+    });
+
+    expect(result.rhythmAdvice).toContain("距分享仅剩 0 天");
   });
 });

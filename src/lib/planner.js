@@ -71,12 +71,26 @@ function resolveStructureSuggestion(duration) {
 }
 
 // 计算距分享日期的天数，返回 null 表示未填日期
+function parseDateInput(dateStr) {
+  if (!dateStr) {
+    return null;
+  }
+
+  const localDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (localDateMatch) {
+    const [, year, month, day] = localDateMatch;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  return new Date(dateStr);
+}
+
 function daysUntil(dateStr) {
   if (!dateStr) {
     return null;
   }
 
-  const target = new Date(dateStr);
+  const target = parseDateInput(dateStr);
   if (Number.isNaN(target.getTime())) {
     return null;
   }

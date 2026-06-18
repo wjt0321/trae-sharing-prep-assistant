@@ -9,11 +9,16 @@ const fieldClass =
   "w-full rounded-[10px] border border-[rgba(43,41,38,0.12)] bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-accent";
 const labelClass = "mb-1.5 block text-xs font-medium text-secondary";
 
-function SelectField({ label, value, onChange, options }) {
+function SelectField({ label, value, onChange, options, disabled }) {
   return (
     <div>
       <label className={labelClass}>{label}</label>
-      <select className={fieldClass} value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        className={fieldClass}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+      >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -24,7 +29,14 @@ function SelectField({ label, value, onChange, options }) {
   );
 }
 
-export function HeroSection({ input, onInputChange, onUseExample, onSubmit, isLoading }) {
+export function HeroSection({
+  input,
+  onInputChange,
+  onUseExample,
+  onSubmit,
+  isLoading,
+  isDisabled
+}) {
   return (
     <section className="animate-rise rounded-panel border border-[rgba(43,41,38,0.1)] bg-surface p-6 shadow-soft sm:p-8 lg:p-10">
       <div className="max-w-3xl">
@@ -50,6 +62,7 @@ export function HeroSection({ input, onInputChange, onUseExample, onSubmit, isLo
           value={input.topic}
           onChange={(event) => onInputChange("topic", event.target.value)}
           placeholder="例如：我要准备一场面向同事的 AI 工具分享，希望逻辑清楚，现场不慌。"
+          disabled={isDisabled}
         />
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -58,12 +71,14 @@ export function HeroSection({ input, onInputChange, onUseExample, onSubmit, isLo
             value={input.audience}
             onChange={(value) => onInputChange("audience", value)}
             options={audienceOptions}
+            disabled={isDisabled}
           />
           <SelectField
             label="分享时长"
             value={input.duration}
             onChange={(value) => onInputChange("duration", value)}
             options={durationOptions}
+            disabled={isDisabled}
           />
           <div>
             <label className={labelClass}>分享日期</label>
@@ -72,6 +87,7 @@ export function HeroSection({ input, onInputChange, onUseExample, onSubmit, isLo
               className={fieldClass}
               value={input.date}
               onChange={(event) => onInputChange("date", event.target.value)}
+              disabled={isDisabled}
             />
           </div>
           <SelectField
@@ -79,12 +95,14 @@ export function HeroSection({ input, onInputChange, onUseExample, onSubmit, isLo
             value={input.goal}
             onChange={(value) => onInputChange("goal", value)}
             options={goalOptions}
+            disabled={isDisabled}
           />
           <SelectField
             label="当前准备状态"
             value={input.preparedness}
             onChange={(value) => onInputChange("preparedness", value)}
             options={preparednessOptions}
+            disabled={isDisabled}
           />
         </div>
 
@@ -93,6 +111,7 @@ export function HeroSection({ input, onInputChange, onUseExample, onSubmit, isLo
             type="button"
             onClick={onUseExample}
             className="inline-flex w-fit rounded-full border border-[rgba(43,41,38,0.1)] bg-surface px-4 py-2 text-sm text-secondary transition hover:border-[rgba(43,41,38,0.16)] hover:text-ink"
+            disabled={isDisabled}
           >
             试试示例：一场小型分享会
           </button>

@@ -29,10 +29,20 @@ export default function App() {
   ];
 
   const handleInputChange = (field, value) => {
+    if (status !== "idle") {
+      setStatus("idle");
+      setResult(null);
+    }
+
     setInput((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleUseExample = () => {
+    if (status !== "idle") {
+      setStatus("idle");
+      setResult(null);
+    }
+
     setInput({ ...defaultInput });
   };
 
@@ -56,6 +66,7 @@ export default function App() {
           onUseExample={handleUseExample}
           onSubmit={handleSubmit}
           isLoading={status === "loading"}
+          isDisabled={status === "loading"}
         />
 
         {status === "idle" && (

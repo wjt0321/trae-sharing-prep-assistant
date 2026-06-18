@@ -107,3 +107,38 @@
 - 根据准备状态自动调整建议起点（当前已部分实现，可进一步细化）
 - 更明确的完成标准
 - 更强的结果复用性（可导出的行动清单、结构摘要、风险排查清单）
+
+## 迭代记录
+
+### 第一轮迭代：交互健壮性与时区修复
+
+在 MVP 首版上线后进行了一轮迭代，主要解决交互一致性与日期计算的边界问题。
+
+#### 修复内容
+
+1. **加载期间禁用表单编辑**
+   - `src/App.jsx`：向 `HeroSection` 传入 `isDisabled` 状态，加载中时为 `true`
+   - `src/components/HeroSection.jsx`：主输入框、5 个补充字段、示例按钮在加载期间全部 `disabled`，避免用户在结果生成过程中修改输入导致结果与输入不一致
+
+2. **结果生成后修改输入自动清空旧结果**
+   - `src/App.jsx`：`handleInputChange` 与 `handleUseExample` 检测到当前非 `idle` 状态时，自动重置为 `idle` 并清空 `result`，回到预览态
+   - 避免用户看到与当前输入不匹配的旧结果
+
+3. **修复负时区下当天日期被误判为已过期**
+   - `src/lib/planner.js`：新增 `parseDateInput` 函数，对 `YYYY-MM-DD` 格式的日期按本地时区解析（构造 `new Date(year, month-1, day)`），而非依赖 `new Date(dateStr)` 的 UTC 解析
+   - 修复前：在负时区（如美洲）环境下，`new Date("2026-06-18")` 会被解析为 UTC 00:00，本地时间可能落到前一天，导致当天分享被误判为"已过期"
+   - 修复后：当天日期正确计算为"距分享仅剩 0 天"
+
+#### 新增测试
+
+- `src/lib/planner.test.js`：新增"负时区语义下当天日期不会被误判为已过期"测试，通过 `vi.stubGlobal("Date", MockDate)` 模拟时区偏移场景
+- `src/App.test.jsx`（新增）：引入 `@testing-library/react` + `jsdom`，新增 2 个交互回归测试：
+  - 加载期间禁用表单编辑
+  - 结果生成后再次修改输入会清空旧结果回到预览态
+
+#### 依赖变更
+
+- `package.json` 新增 devDependencies：
+  - `@testing-library/react`：React 组件测试工具
+  - `@testing-library/user-event`：用户交互事件模拟
+  - `jsdom`：浏览器环境模拟，供组件测试使用
