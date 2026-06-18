@@ -6,5 +6,9 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "docs"
+  },
+  test: {
+    include: ["src/**/*.{test,spec}.{js,jsx}"],
+    exclude: ["node_modules/**", ".trae/**", "docs/**"]
   }
 });

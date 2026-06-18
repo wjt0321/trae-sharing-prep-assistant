@@ -1,3 +1,15 @@
+const statusBadgeClass = {
+  done: "bg-[rgba(111,144,124,0.12)] text-success",
+  current: "bg-[rgba(201,106,61,0.12)] text-accent",
+  pending: "bg-muted text-secondary"
+};
+
+const statusLabel = {
+  done: "已完成",
+  current: "建议起点",
+  pending: "待推进"
+};
+
 export function StageSection({ stages }) {
   return (
     <section className="animate-rise">
@@ -17,11 +29,27 @@ export function StageSection({ stages }) {
             key={stage.id}
             className="rounded-panel border border-[rgba(43,41,38,0.1)] bg-surface p-6 shadow-soft"
           >
-            <div className="mb-4 inline-flex rounded-full bg-muted px-3 py-1 text-xs font-medium text-secondary">
-              {stage.tag}
+            <div className="mb-3 flex items-center gap-2">
+              <span className="inline-flex rounded-full bg-muted px-3 py-1 text-xs font-medium text-secondary">
+                {stage.tag}
+              </span>
+              {stage.status && (
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass[stage.status]}`}
+                >
+                  {statusLabel[stage.status]}
+                </span>
+              )}
             </div>
             <h3 className="text-xl font-semibold text-ink">{stage.title}</h3>
             <p className="mt-3 text-sm leading-6 text-secondary">{stage.description}</p>
+
+            {stage.goal && (
+              <p className="mt-3 text-sm leading-6 text-ink">
+                <span className="font-medium text-accent">阶段目标：</span>
+                {stage.goal}
+              </p>
+            )}
 
             <ul className="mt-5 space-y-3">
               {stage.tasks.map((task) => (
@@ -31,6 +59,13 @@ export function StageSection({ stages }) {
                 </li>
               ))}
             </ul>
+
+            {stage.criteria && (
+              <div className="mt-5 rounded-[12px] border border-[rgba(43,41,38,0.08)] bg-canvas/70 px-4 py-3">
+                <p className="text-xs font-medium text-secondary">完成标准</p>
+                <p className="mt-1 text-sm leading-6 text-ink">{stage.criteria}</p>
+              </div>
+            )}
           </article>
         ))}
       </div>

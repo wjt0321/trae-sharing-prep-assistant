@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AppHeader } from "./components/AppHeader";
 import { ChecklistPanel } from "./components/ChecklistPanel";
 import { FooterNote } from "./components/FooterNote";
@@ -6,36 +6,41 @@ import { HeroSection } from "./components/HeroSection";
 import { InsightPanel } from "./components/InsightPanel";
 import { LoadingState } from "./components/LoadingState";
 import { StageSection } from "./components/StageSection";
-import { defaultGoal } from "./data/demoTemplates";
-import { createPlanFromGoal } from "./lib/planner";
+import { StructureSuggestionPanel } from "./components/StructureSuggestionPanel";
+import { defaultInput } from "./data/demoTemplates";
+import { createPlan } from "./lib/planner";
 
 const initialHint = {
-  title: "输入一个分享目标后，这里会出现完整的筹备路径",
+  title: "输入分享目标后，这里会出现完整的筹备路径",
   description:
-    "你将看到 4 个准备阶段、最终行动清单，以及准备重点和容易遗漏的事项。重点不是“回答你”，而是帮你把分享准备真正往前推进。"
+    "你将看到 4 个准备阶段、分享结构建议、最终行动清单，以及准备重点和容易遗漏的事项。重点不是“回答你”，而是帮你把分享准备真正往前推进。"
 };
 
 export default function App() {
-  const [goal, setGoal] = useState(defaultGoal);
+  const [input, setInput] = useState(defaultInput);
   const [status, setStatus] = useState("idle");
   const [result, setResult] = useState(null);
 
-  const hintCards = useMemo(
-    () => [
-      "先确认主题和听众",
-      "再搭内容结构",
-      "然后安排时间与设备",
-      "最后完成预演和收尾检查"
-    ],
-    []
-  );
+  const hintCards = [
+    "先确认主题和听众",
+    "再搭内容结构",
+    "然后安排时间与设备",
+    "最后完成预演和收尾检查"
+  ];
+
+  const handleInputChange = (field, value) => {
+    setInput((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUseExample = () => {
+    setInput({ ...defaultInput });
+  };
 
   const handleSubmit = () => {
-    const input = goal.trim() || defaultGoal;
     setStatus("loading");
 
     window.setTimeout(() => {
-      setResult(createPlanFromGoal(input));
+      setResult(createPlan(input));
       setStatus("done");
     }, 900);
   };
@@ -46,9 +51,9 @@ export default function App() {
 
       <main className="mx-auto flex w-full max-w-content flex-col gap-10 px-5 py-8 sm:px-6 lg:px-8 lg:py-10">
         <HeroSection
-          goal={goal}
-          onGoalChange={setGoal}
-          onUseExample={setGoal}
+          input={input}
+          onInputChange={handleInputChange}
+          onUseExample={handleUseExample}
           onSubmit={handleSubmit}
           isLoading={status === "loading"}
         />
@@ -95,6 +100,10 @@ export default function App() {
             </section>
 
             <StageSection stages={result.stages} />
+
+            {result.structureSuggestion && (
+              <StructureSuggestionPanel suggestion={result.structureSuggestion} />
+            )}
 
             <section className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
               <ChecklistPanel checklist={result.checklist} />
