@@ -8,7 +8,7 @@ export function AppHeader() {
         </div>
 
         <div className="rounded-full border border-[rgba(43,41,38,0.1)] bg-surface px-3 py-1 text-xs font-medium text-secondary">
-          TRAE AI 创造力大赛 · 初赛 Demo
+          TRAE AI 创造力大赛 · 参赛作品
         </div>
       </div>
     </header>

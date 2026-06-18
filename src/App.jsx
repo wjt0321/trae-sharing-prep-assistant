@@ -11,9 +11,14 @@ import { defaultInput } from "./data/demoTemplates";
 import { createPlan } from "./lib/planner";
 
 const initialHint = {
-  title: "输入分享目标后，这里会出现完整的筹备路径",
-  description:
-    "你将看到 4 个准备阶段、分享结构建议、最终行动清单，以及准备重点和容易遗漏的事项。重点不是“回答你”，而是帮你把分享准备真正往前推进。"
+  eyebrow: "示例成果预览",
+  title: "输入后会得到一份可直接执行的筹备结果",
+  description: "系统会把分享准备整理成阶段路径、行动清单和关键提醒，不是停留在想法层面。",
+  points: [
+    "4 个准备阶段已生成",
+    "建议从“目标与主题确认”开始推进",
+    "行动清单与提醒已收口，可直接照着推进"
+  ]
 };
 
 export default function App() {
@@ -71,12 +76,20 @@ export default function App() {
 
         {status === "idle" && (
           <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
-            <div className="rounded-panel border border-dashed border-[rgba(43,41,38,0.16)] bg-surface p-6 shadow-soft">
-              <p className="text-sm font-medium text-accent">结果预览区</p>
+            <div className="rounded-panel border border-[rgba(43,41,38,0.1)] bg-surface p-6 shadow-soft">
+              <p className="text-sm font-medium text-accent">{initialHint.eyebrow}</p>
               <h2 className="mt-2 text-2xl font-semibold text-ink">{initialHint.title}</h2>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-secondary">
                 {initialHint.description}
               </p>
+              <ul className="mt-5 space-y-3">
+                {initialHint.points.map((item) => (
+                  <li key={item} className="flex gap-3 text-sm leading-6 text-ink">
+                    <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-accent" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="rounded-panel border border-[rgba(43,41,38,0.1)] bg-surface p-6 shadow-soft">

@@ -34,6 +34,17 @@ describe("App 交互回归", () => {
     );
   });
 
+  test("idle 态展示压缩版示例成果卡和成品化比赛文案", () => {
+    render(<App />);
+
+    expect(screen.getByText("示例成果预览")).toBeTruthy();
+    expect(screen.getByText("4 个准备阶段已生成")).toBeTruthy();
+    expect(screen.getByText("建议从“目标与主题确认”开始推进")).toBeTruthy();
+    expect(screen.getByText("行动清单与提醒已收口，可直接照着推进")).toBeTruthy();
+    expect(screen.getByText("TRAE AI 创造力大赛 · 参赛作品")).toBeTruthy();
+    expect(screen.getByText(/为分享准备生成结构化执行路径的单场景作品/)).toBeTruthy();
+  });
+
   test("结果生成后再次修改输入，会清空旧结果回到预览态", () => {
     render(<App />);
 
@@ -52,6 +63,6 @@ describe("App 交互回归", () => {
     });
 
     expect(screen.queryByText("根据你的目标生成的分享筹备路径")).toBeNull();
-    expect(screen.getByText("输入分享目标后，这里会出现完整的筹备路径")).toBeTruthy();
+    expect(screen.getByText("输入后会得到一份可直接执行的筹备结果")).toBeTruthy();
   });
 });
