@@ -130,9 +130,11 @@ export default function GoalDetailPage() {
             {deleting ? "删除中..." : "删除"}
           </Button>
           <div className="ml-auto">
-            <Button size="sm" disabled title="规划引擎即将上线">
-              继续规划
-            </Button>
+            <Link href={`/app/goals/${goal.id}/plan`}>
+              <Button size="sm">
+                继续规划
+              </Button>
+            </Link>
           </div>
         </div>
       )}
