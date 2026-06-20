@@ -206,22 +206,50 @@ model ExecutionTask {
   goal         Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
   // 阶段 ID（可空，表示不属于特定阶段）
   stageId      String?
+  // 阶段名称（冗余存储，便于列表展示，避免每次反查 Plan.content）
+  stageName    String?
   title        String
   description  String?
-  // pending | in_progress | completed | cancelled | blocked
+  // pending | in_progress | completed | cancelled | blocked | skipped
   status       String   @default("pending")
   sortOrder    Int      @default(0)
   dueDate      DateTime?
   completedAt  DateTime?
+  // 阻塞原因（status=blocked 时有值）
+  blockerNote  String?
   // 创建者
   creatorId    String
   creator      User     @relation("TaskCreator", fields: [creatorId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  statusHistory TaskStatusHistory[]
+
   @@index([goalId])
   @@index([status])
   @@index([creatorId])
+  @@index([stageId])
+}
+
+// 任务状态变更历史（参考 05 实施清单：记录每次状态变化的时间和操作者）
+model TaskStatusHistory {
+  id           String   @id @default(uuid())
+  taskId       String
+  task         ExecutionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  // 变更前状态（首次创建时为 null）
+  fromStatus   String?
+  // 变更后状态
+  toStatus     String
+  // 操作备注
+  note         String?
+  // 阻塞原因（toStatus=blocked 时有值）
+  blockerNote  String?
+  // 操作者
+  operatorId   String
+  createdAt    DateTime @default(now())
+
+  @@index([taskId])
+  @@index([operatorId])
 }
 
 // ============================================================

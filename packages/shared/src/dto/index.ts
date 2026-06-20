@@ -2,6 +2,7 @@ export * from './api-response.dto.js';
 export * from './pagination.dto.js';
 export * from './goal.dto.js';
 export * from './planning.dto.js';
+export * from './execution.dto.js';
 export * from './workspace.dto.js';
 export * from './task-job.dto.js';
 export * from './auth.dto.js';

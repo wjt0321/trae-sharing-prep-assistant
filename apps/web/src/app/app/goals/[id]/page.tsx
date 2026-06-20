@@ -129,10 +129,15 @@ export default function GoalDetailPage() {
           >
             {deleting ? "删除中..." : "删除"}
           </Button>
-          <div className="ml-auto">
+          <div className="ml-auto flex gap-2">
             <Link href={`/app/goals/${goal.id}/plan`}>
+              <Button variant="secondary" size="sm">
+                查看规划
+              </Button>
+            </Link>
+            <Link href={`/app/goals/${goal.id}/execution`}>
               <Button size="sm">
-                继续规划
+                进入工作台
               </Button>
             </Link>
           </div>
