@@ -1,3 +1,53 @@
+# Dependencies
 node_modules/
+
+# Build outputs
 dist/
+.next/
+out/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+apps/server/prisma/migrations/dev.db*
+
+# Uploads (local file storage)
+apps/server/uploads/*
+!apps/server/uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Trae IDE skill files (not project source)
 .trae/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Cache
+.turbo/
+.cache/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

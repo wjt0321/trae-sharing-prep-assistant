@@ -1,27 +1,32 @@
 {
-  "name": "sharing-session-planner-demo",
+  "name": "ai-task-manager",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest run"
+  "description": "AI 任务管家 - 从分享会筹备助手升级而来的长期产品骨架",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=20.0.0"
   },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+  "scripts": {
+    "dev": "pnpm -r --parallel --stream run dev",
+    "dev:web": "pnpm --filter @ai-task-manager/web dev",
+    "dev:server": "pnpm --filter @ai-task-manager/server start:dev",
+    "build": "pnpm -r run build",
+    "build:web": "pnpm --filter @ai-task-manager/web build",
+    "build:server": "pnpm --filter @ai-task-manager/server build",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "db:setup": "pnpm --filter @ai-task-manager/server db:setup",
+    "db:migrate": "pnpm --filter @ai-task-manager/server db:migrate",
+    "db:seed": "pnpm --filter @ai-task-manager/server db:seed",
+    "clean": "pnpm -r exec rimraf node_modules dist .next .turbo && rimraf node_modules",
+    "legacy:dev": "pnpm --filter sharing-session-planner-demo dev",
+    "legacy:build": "pnpm --filter sharing-session-planner-demo build",
+    "legacy:test": "pnpm --filter sharing-session-planner-demo test"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
-    "@vitejs/plugin-react": "^4.4.1",
-    "autoprefixer": "^10.4.21",
-    "jsdom": "^29.1.1",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17",
-    "vite": "^5.4.19",
-    "vitest": "^2.1.9"
+    "typescript": "^5.6.3",
+    "rimraf": "^6.0.1"
   }
 }

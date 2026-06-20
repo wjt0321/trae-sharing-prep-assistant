@@ -1,0 +1,355 @@
+// AI 任务管家 - Prisma Schema
+// 数据库：SQLite（Windows 本地可运行，参考 11_后端平台数据层与AI基础设施实施清单.md）
+// 说明：SQLite 不支持原生 enum/Json，统一用 String + 应用层枚举校验
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// 用户与认证（参考 02_账号工作区与权限基础实施清单.md）
+// ============================================================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  avatarUrl    String?
+  // 默认个人工作区
+  defaultWorkspaceId String?
+  defaultWorkspace    Workspace? @relation("DefaultWorkspace", fields: [defaultWorkspaceId], references: [id])
+  // 时间戳
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  // 关联
+  workspaces   WorkspaceMember[]
+  sessions     Session[]
+  ownedWorkspaces Workspace[] @relation("WorkspaceOwner")
+  goals        Goal[]
+  comments     Comment[]
+  createdTasks ExecutionTask[] @relation("TaskCreator")
+  taskJobs     TaskJob[]
+
+  @@index([email])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String
+  // 设备/UA 信息
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([refreshToken])
+}
+
+// ============================================================
+// 工作区（参考 02_账号工作区与权限基础实施清单.md）
+// ============================================================
+
+model Workspace {
+  id          String   @id @default(uuid())
+  name        String
+  // personal | team
+  type        String   @default("personal")
+  description String?
+  ownerId     String
+  owner       User     @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  members     WorkspaceMember[]
+  invites     Invite[]
+  goals       Goal[]
+  templates   Template[]
+  knowledgeAssets KnowledgeAsset[]
+  // 作为某些用户默认工作区的引用
+  defaultForUsers User[] @relation("DefaultWorkspace")
+
+  @@index([ownerId])
+}
+
+model WorkspaceMember {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // owner | admin | editor | viewer
+  role         String   @default("viewer")
+  joinedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+model Invite {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email        String
+  role         String   @default("viewer")
+  // 邀请 token
+  token        String   @unique
+  invitedById  String
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([email])
+}
+
+// ============================================================
+// 目标与规划（参考 03_目标创建器与场景识别、04_AI规划与重规划引擎）
+// ============================================================
+
+model Goal {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // 创建者
+  creatorId    String
+  creator      User     @relation(fields: [creatorId], references: [id])
+  // 结构化输入
+  topic        String
+  audience     String?
+  duration     Int?
+  shareDate    DateTime?
+  // inform | persuade | teach | review
+  goalType     String?
+  preparedness String?
+  // 场景标签（逗号分隔）
+  sceneTags    String?
+  // 时间戳
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  plans        Plan[]
+  tasks        ExecutionTask[]
+  comments     Comment[]
+  exports      ExportRecord[]
+
+  @@index([workspaceId])
+  @@index([creatorId])
+}
+
+model Plan {
+  id           String   @id @default(uuid())
+  goalId       String
+  goal         Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  // 版本号，支持重规划
+  version      Int      @default(1)
+  // 是否为当前生效版本
+  isActive     Boolean  @default(true)
+  // 规划内容（JSON 字符串，包含 stages/checklist/insights/structureSuggestion）
+  content      String
+  // 规划来源：rule_engine | ai | hybrid
+  source       String   @default("rule_engine")
+  // AI 调用记录
+  aiPromptLog  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([goalId])
+  @@index([isActive])
+}
+
+// ============================================================
+// 执行工作台（参考 05_执行工作台与推进系统实施清单.md）
+// ============================================================
+
+model ExecutionTask {
+  id           String   @id @default(uuid())
+  goalId       String
+  goal         Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  // 阶段 ID（可空，表示不属于特定阶段）
+  stageId      String?
+  title        String
+  description  String?
+  // pending | in_progress | completed | cancelled | blocked
+  status       String   @default("pending")
+  sortOrder    Int      @default(0)
+  dueDate      DateTime?
+  completedAt  DateTime?
+  // 创建者
+  creatorId    String
+  creator      User     @relation("TaskCreator", fields: [creatorId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([goalId])
+  @@index([status])
+  @@index([creatorId])
+}
+
+// ============================================================
+// 协作与评论（参考 07_协作评论与版本管理实施清单.md）
+// ============================================================
+
+model Comment {
+  id           String   @id @default(uuid())
+  goalId       String
+  goal         Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  content      String
+  // 父评论 ID（支持回复）
+  parentId     String?
+  // 关联的任务/阶段（可选）
+  anchorType   String?
+  anchorId     String?
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([goalId])
+  @@index([userId])
+}
+
+// ============================================================
+// 模板库与知识库（参考 06_模板库知识库与资产沉淀实施清单.md）
+// ============================================================
+
+model Template {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  // 模板分类
+  category     String
+  // 模板内容（JSON 字符串）
+  content      String
+  // 是否为系统内置
+  isBuiltIn    Boolean  @default(false)
+  // 使用次数
+  usageCount   Int      @default(0)
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([category])
+}
+
+model KnowledgeAsset {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title        String
+  // asset | insight | checklist | case
+  type         String
+  content      String
+  // 标签（逗号分隔）
+  tags         String?
+  // 来源目标 ID（可空，表示手动创建）
+  sourceGoalId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([type])
+}
+
+// ============================================================
+// 导出（参考 08_导出分享与交付输出实施清单.md）
+// ============================================================
+
+model ExportRecord {
+  id           String   @id @default(uuid())
+  goalId       String
+  goal         Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  // markdown | pdf | html | json
+  format       String
+  // 文件路径（本地 uploads/ 下）
+  filePath     String?
+  // 分享 token（可空，表示不分享）
+  shareToken   String?  @unique
+  // 状态
+  status       String   @default("pending")
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([goalId])
+  @@index([shareToken])
+}
+
+// ============================================================
+// 异步任务调度（参考 11_后端平台数据层与AI基础设施实施清单.md）
+// ============================================================
+
+model TaskJob {
+  id           String   @id @default(uuid())
+  // plan_generation | replan | export | notification | ai_call | knowledge_index | cleanup
+  type         String
+  // queued | running | succeeded | failed | cancelled | timeout
+  status       String   @default("queued")
+  // 任务输入（JSON 字符串）
+  payload      String
+  // 任务输出（JSON 字符串）
+  result       String?
+  errorMessage String?
+  retryCount   Int      @default(0)
+  maxRetries   Int      @default(3)
+  scheduledAt  DateTime @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  // 关联用户（可空，系统任务无用户）
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([userId])
+}
+
+// ============================================================
+// AI 调用日志（参考 11_后端平台数据层与AI基础设施实施清单.md）
+// ============================================================
+
+model AiCallLog {
+  id           String   @id @default(uuid())
+  // 模型标识
+  model        String
+  // prompt 模板名
+  promptName   String?
+  // 输入 token 数
+  inputTokens  Int      @default(0)
+  // 输出 token 数
+  outputTokens Int      @default(0)
+  // 耗时（毫秒）
+  durationMs   Int      @default(0)
+  // 是否成功
+  success      Boolean  @default(true)
+  errorMessage String?
+  // 关联任务
+  taskJobId    String?
+  createdAt    DateTime @default(now())
+
+  @@index([model])
+  @@index([createdAt])
+}
