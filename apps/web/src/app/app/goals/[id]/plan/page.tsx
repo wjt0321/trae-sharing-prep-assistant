@@ -147,9 +147,9 @@ export default function PlanPage() {
               <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-xs text-accent">
                 v{activePlan.version}
               </span>
-              {activePlan.replanReason && (
+              {activePlan.changeReason && (
                 <span className="text-xs text-tertiary">
-                  重规划：{activePlan.replanReason}
+                  {activePlan.changeReason}
                 </span>
               )}
             </div>
@@ -175,21 +175,29 @@ export default function PlanPage() {
 
           {/* 版本切换器 */}
           {versions.length > 1 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {versions.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => handleSwitchVersion(v.version)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
-                    v.isActive
-                      ? "border-accent bg-accent/5 text-accent"
-                      : "border-border bg-surface text-secondary hover:border-accent/50"
-                  }`}
-                >
-                  v{v.version}
-                  {v.isActive && " · 当前"}
-                </button>
-              ))}
+            <div className="mt-4 space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {versions.map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => handleSwitchVersion(v.version)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                      v.isActive
+                        ? "border-accent bg-accent/5 text-accent"
+                        : "border-border bg-surface text-secondary hover:border-accent/50"
+                    }`}
+                  >
+                    v{v.version}
+                    {v.isActive && " · 当前"}
+                  </button>
+                ))}
+              </div>
+              {/* 当前选中版本的变更原因 */}
+              {activePlan.changeReason && (
+                <p className="text-xs text-tertiary">
+                  v{activePlan.version} 变更原因：{activePlan.changeReason}
+                </p>
+              )}
             </div>
           )}
 

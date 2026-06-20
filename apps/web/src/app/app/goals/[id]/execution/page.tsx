@@ -25,11 +25,18 @@ import {
 // ============================================================
 interface GoalBrief {
   id: string;
+  workspaceId: string;
   topic: string;
   title: string | null;
   scenarioType: string | null;
   currentStage: string;
   successCriteria: string | null;
+}
+
+interface WorkspaceMember {
+  userId: string;
+  displayName: string;
+  role: string;
 }
 
 interface HistoryItem {
@@ -55,11 +62,13 @@ export default function ExecutionPage() {
   const [nextSteps, setNextSteps] = useState<NextStepsResponseDto | null>(null);
   const [activePlan, setActivePlan] = useState<PlanResponseDto | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncTasksResponseDto | null>(null);
   const [statusModal, setStatusModal] = useState<{ task: TaskResponseDto } | null>(null);
+  const [assignModal, setAssignModal] = useState<{ task: TaskResponseDto } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -81,6 +90,26 @@ export default function ExecutionPage() {
       setLoading(false);
     }
   }, [goalId]);
+
+  // 加载工作区成员
+  useEffect(() => {
+    if (goal?.workspaceId) {
+      api
+        .get<Array<{ userId: string; displayName: string; role: string }>>(
+          `/workspaces/${goal.workspaceId}/members`,
+        )
+        .then((data) => {
+          setMembers(
+            data.map((m) => ({
+              userId: m.userId,
+              displayName: m.displayName,
+              role: m.role,
+            })),
+          );
+        })
+        .catch(() => {});
+    }
+  }, [goal?.workspaceId]);
 
   useEffect(() => {
     loadData();
@@ -275,9 +304,11 @@ export default function ExecutionPage() {
           <div className="lg:col-span-2 space-y-4">
             <TaskBoard
               tasks={tasks}
+              members={members}
               onStatusChange={(task) => setStatusModal({ task })}
               onQuickComplete={(taskId) => handleQuickStatus(taskId, TaskStatusEnum.COMPLETED)}
               onQuickStart={(taskId) => handleQuickStatus(taskId, TaskStatusEnum.IN_PROGRESS)}
+              onAssign={(task) => setAssignModal({ task })}
             />
 
             {/* 阻塞区 */}
@@ -314,6 +345,19 @@ export default function ExecutionPage() {
           }}
         />
       )}
+
+      {/* 指派弹窗 */}
+      {assignModal && (
+        <AssignModal
+          task={assignModal.task}
+          members={members}
+          onClose={() => setAssignModal(null)}
+          onSuccess={() => {
+            setAssignModal(null);
+            loadData();
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -323,14 +367,18 @@ export default function ExecutionPage() {
 // ============================================================
 function TaskBoard({
   tasks,
+  members,
   onStatusChange,
   onQuickComplete,
   onQuickStart,
+  onAssign,
 }: {
   tasks: TaskResponseDto[];
+  members: WorkspaceMember[];
   onStatusChange: (task: TaskResponseDto) => void;
   onQuickComplete: (taskId: string) => void;
   onQuickStart: (taskId: string) => void;
+  onAssign: (task: TaskResponseDto) => void;
 }) {
   // 按阶段分组
   const phaseMap = new Map<string, TaskResponseDto[]>();
@@ -365,9 +413,11 @@ function TaskBoard({
                 <TaskRow
                   key={task.id}
                   task={task}
+                  members={members}
                   onStatusChange={() => onStatusChange(task)}
                   onQuickComplete={() => onQuickComplete(task.id)}
                   onQuickStart={() => onQuickStart(task.id)}
+                  onAssign={() => onAssign(task)}
                 />
               ))}
             </ul>
@@ -380,18 +430,26 @@ function TaskBoard({
 
 function TaskRow({
   task,
+  members,
   onStatusChange,
   onQuickComplete,
   onQuickStart,
+  onAssign,
 }: {
   task: TaskResponseDto;
+  members: WorkspaceMember[];
   onStatusChange: () => void;
   onQuickComplete: () => void;
   onQuickStart: () => void;
+  onAssign: () => void;
 }) {
   const isCompleted = task.status === TaskStatusEnum.COMPLETED;
   const isBlocked = task.status === TaskStatusEnum.BLOCKED;
   const isInProgress = task.status === TaskStatusEnum.IN_PROGRESS;
+
+  const assignee = task.assigneeId
+    ? members.find((m) => m.userId === task.assigneeId)
+    : null;
 
   return (
     <li className="group flex items-start gap-2.5 rounded-lg border border-border/60 px-3 py-2 hover:border-border hover:bg-muted/30 transition-colors">
@@ -447,6 +505,23 @@ function TaskRow({
           </p>
         )}
       </div>
+
+      {/* 指派人 / 指派按钮 */}
+      <button
+        onClick={onAssign}
+        className="shrink-0"
+        title={assignee ? `指派给 ${assignee.displayName}` : "指派任务"}
+      >
+        {assignee ? (
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/10 text-[10px] font-medium text-accent">
+            {assignee.displayName.charAt(0).toUpperCase()}
+          </span>
+        ) : (
+          <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border text-tertiary hover:border-accent hover:text-accent">
+            +
+          </span>
+        )}
+      </button>
 
       {/* 操作按钮 */}
       <button
@@ -790,6 +865,126 @@ function StatusModal({
           </Button>
           <Button onClick={handleSubmit} disabled={submitting}>
             {submitting ? "提交中..." : "确认变更"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 指派弹窗
+// ============================================================
+function AssignModal({
+  task,
+  members,
+  onClose,
+  onSuccess,
+}: {
+  task: TaskResponseDto;
+  members: WorkspaceMember[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAssign = async (assigneeId: string) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.post(`/tasks/${task.id}/assign`, {
+        assigneeId,
+        note: note || undefined,
+      });
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "指派失败");
+      setSubmitting(false);
+    }
+  };
+
+  const handleUnassign = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.delete(`/tasks/${task.id}/assign`);
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "取消指派失败");
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="w-full max-w-md rounded-xl bg-surface p-6 shadow-lg animate-rise">
+        <h2 className="text-lg font-semibold text-ink">指派任务</h2>
+        <p className="mt-1 text-xs text-tertiary">{task.title}</p>
+
+        <div className="mt-4">
+          <label className="mb-1.5 block text-sm font-medium text-secondary">
+            备注（可选）
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="给被指派人的说明"
+            rows={2}
+            className="w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-tertiary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
+          />
+        </div>
+
+        <div className="mt-4">
+          <p className="mb-2 text-sm font-medium text-secondary">选择成员</p>
+          {members.length === 0 ? (
+            <p className="text-xs text-tertiary">工作区暂无其他成员</p>
+          ) : (
+            <ul className="max-h-60 space-y-1 overflow-y-auto">
+              {members.map((m) => (
+                <li key={m.userId}>
+                  <button
+                    onClick={() => handleAssign(m.userId)}
+                    disabled={submitting}
+                    className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
+                      task.assigneeId === m.userId
+                        ? "border-accent bg-accent/5"
+                        : "border-border hover:border-accent/50"
+                    }`}
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-xs font-medium text-accent">
+                      {m.displayName.charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-ink">{m.displayName}</p>
+                      <p className="text-[10px] text-tertiary">{m.role}</p>
+                    </div>
+                    {task.assigneeId === m.userId && (
+                      <span className="text-[10px] text-accent">当前</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {task.assigneeId && (
+          <button
+            onClick={handleUnassign}
+            disabled={submitting}
+            className="mt-3 text-xs text-danger hover:underline"
+          >
+            取消当前指派
+          </button>
+        )}
+
+        {error && <p className="mt-3 text-xs text-danger">{error}</p>}
+
+        <div className="mt-6 flex justify-end">
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>
+            关闭
           </Button>
         </div>
       </div>

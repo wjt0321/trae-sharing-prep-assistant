@@ -82,7 +82,9 @@ export interface PlanResponseDto {
   isActive: boolean;
   content: PlanContent;
   source: PlanSource;
-  /** 重规划原因（首版为 null） */
+  /** 版本变更原因（首版为 null，重规划为原因） */
+  changeReason: string | null;
+  /** 重规划原因（兼容字段，同 changeReason） */
   replanReason: string | null;
   createdAt: string;
   updatedAt: string;

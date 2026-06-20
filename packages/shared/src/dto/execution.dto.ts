@@ -59,6 +59,8 @@ export interface TaskResponseDto {
   completedAt: string | null;
   /** 阻塞原因（status=blocked 时有值） */
   blockerNote: string | null;
+  /** 当前指派人 ID */
+  assigneeId: string | null;
   creatorId: string;
   createdAt: string;
   updatedAt: string;

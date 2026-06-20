@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { CollaborationService } from '../collaboration/collaboration.service';
 import {
   ApiError,
   ErrorCode,
@@ -7,6 +8,7 @@ import {
   TASK_STATUS_TRANSITIONS,
   TASK_TERMINAL_STATUSES,
   GoalStageEnum,
+  ActivityEventTypeEnum,
   type TaskResponseDto,
   type TaskStatusHistoryDto,
   type GoalProgressDto,
@@ -28,7 +30,10 @@ import type { BatchUpdateStatusDto } from './dto/batch-update.dto';
 export class ExecutionService {
   private readonly logger = new Logger(ExecutionService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly collaborationService: CollaborationService,
+  ) {}
 
   // ============================================================
   // 任务查询
@@ -121,6 +126,16 @@ export class ExecutionService {
         data: { currentStage: GoalStageEnum.EXECUTING },
       });
     }
+
+    // 记录活动流
+    await this.collaborationService.recordActivity({
+      goalId: goal.id,
+      actorId: userId,
+      type: ActivityEventTypeEnum.TASK_CREATED,
+      targetType: 'task',
+      targetId: task.id,
+      targetTitle: task.title,
+    });
 
     this.logger.log(`任务已创建: ${task.id} (goal=${goal.id})`);
     return this.toTaskResponse(task);
@@ -223,6 +238,17 @@ export class ExecutionService {
         },
       }),
     ]);
+
+    // 记录活动流
+    await this.collaborationService.recordActivity({
+      goalId: task.goalId,
+      actorId: userId,
+      type: ActivityEventTypeEnum.TASK_STATUS_CHANGED,
+      targetType: 'task',
+      targetId: id,
+      targetTitle: task.title,
+      detail: `${fromStatus} → ${toStatus}`,
+    });
 
     this.logger.log(`任务状态变更: ${id} ${fromStatus} → ${toStatus} (by ${userId})`);
     return this.toTaskResponse(updated);
@@ -647,6 +673,7 @@ export class ExecutionService {
     dueDate: Date | null;
     completedAt: Date | null;
     blockerNote: string | null;
+    assigneeId: string | null;
     creatorId: string;
     createdAt: Date;
     updatedAt: Date;
@@ -663,6 +690,7 @@ export class ExecutionService {
       dueDate: task.dueDate?.toISOString() ?? null,
       completedAt: task.completedAt?.toISOString() ?? null,
       blockerNote: task.blockerNote,
+      assigneeId: task.assigneeId,
       creatorId: task.creatorId,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),

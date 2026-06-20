@@ -149,6 +149,11 @@ export default function GoalDetailPage() {
                 工作台
               </Button>
             </Link>
+            <Link href={`/app/goals/${goal.id}/collaboration`}>
+              <Button variant="secondary" size="sm">
+                协作
+              </Button>
+            </Link>
             <Link href={`/app/goals/${goal.id}/exports`}>
               <Button size="sm">
                 导出分享

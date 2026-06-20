@@ -169,6 +169,7 @@ model Goal {
   tasks        ExecutionTask[]
   comments     Comment[]
   exports      ExportRecord[]
+  activityEvents ActivityEvent[]
 
   @@index([workspaceId])
   @@index([creatorId])
@@ -188,6 +189,8 @@ model Plan {
   content      String
   // 规划来源：rule_engine | ai | hybrid
   source       String   @default("rule_engine")
+  // 版本变更原因（首版为 null，重规划为原因，切换活跃版本为说明）
+  changeReason String?
   // AI 调用记录
   aiPromptLog  String?
   createdAt    DateTime @default(now())
@@ -218,6 +221,8 @@ model ExecutionTask {
   completedAt  DateTime?
   // 阻塞原因（status=blocked 时有值）
   blockerNote  String?
+  // 当前指派人（冗余存储，便于查询；变更历史见 Assignment 表）
+  assigneeId   String?
   // 创建者
   creatorId    String
   creator      User     @relation("TaskCreator", fields: [creatorId], references: [id])
@@ -225,11 +230,13 @@ model ExecutionTask {
   updatedAt    DateTime @updatedAt
 
   statusHistory TaskStatusHistory[]
+  assignments   Assignment[]
 
   @@index([goalId])
   @@index([status])
   @@index([creatorId])
   @@index([stageId])
+  @@index([assigneeId])
 }
 
 // 任务状态变更历史（参考 05 实施清单：记录每次状态变化的时间和操作者）
@@ -269,12 +276,61 @@ model Comment {
   // 关联的任务/阶段（可选）
   anchorType   String?
   anchorId     String?
+  // 评论类型：comment | annotation（批注）
+  type         String   @default("comment")
+  // @提及的用户 ID（逗号分隔）
+  mentions     String?
   resolvedAt   DateTime?
+  resolvedById String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([goalId])
   @@index([userId])
+  @@index([anchorType, anchorId])
+  @@index([type])
+}
+
+// 任务指派历史（参考 07 实施清单：指派变更留痕）
+model Assignment {
+  id           String   @id @default(uuid())
+  taskId       String
+  task         ExecutionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  // 被指派人
+  assigneeId   String
+  // 指派操作者
+  assignedById String
+  // 指派备注
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@index([taskId])
+  @@index([assigneeId])
+}
+
+// 活动流事件（参考 07 实施清单：谁修改了什么/完成了什么/提出了什么风险）
+model ActivityEvent {
+  id           String   @id @default(uuid())
+  goalId       String
+  goal         Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  // 事件类型（参考 ActivityEventTypeEnum）
+  type         String
+  // 操作者
+  actorId      String
+  // 目标对象类型：task / plan / goal / comment
+  targetType   String
+  // 目标对象 ID
+  targetId     String
+  // 目标对象标题（冗余，便于展示）
+  targetTitle  String?
+  // 事件详情（如状态变更的 from→to）
+  detail       String?
+  createdAt    DateTime @default(now())
+
+  @@index([goalId])
+  @@index([type])
+  @@index([actorId])
+  @@index([targetType, targetId])
 }
 
 // ============================================================

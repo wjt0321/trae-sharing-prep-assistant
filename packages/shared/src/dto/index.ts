@@ -5,6 +5,7 @@ export * from './planning.dto.js';
 export * from './execution.dto.js';
 export * from './export.dto.js';
 export * from './knowledge.dto.js';
+export * from './collaboration.dto.js';
 export * from './workspace.dto.js';
 export * from './task-job.dto.js';
 export * from './auth.dto.js';

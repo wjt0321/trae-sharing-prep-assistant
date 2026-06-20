@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AiGatewayService } from '../../infrastructure/ai-gateway/ai-gateway.service';
 import { PlanEngine } from './plan-engine';
+import { CollaborationService } from '../collaboration/collaboration.service';
 import {
   ApiError,
   ErrorCode,
+  ActivityEventTypeEnum,
   type PlanContent,
   type PlanResponseDto,
   type PlanCompareResponseDto,
@@ -20,6 +22,7 @@ export class PlanningService {
     private readonly prisma: PrismaService,
     private readonly aiGateway: AiGatewayService,
     private readonly planEngine: PlanEngine,
+    private readonly collaborationService: CollaborationService,
   ) {}
 
   // ============================================================
@@ -110,6 +113,7 @@ export class PlanningService {
         isActive: true,
         content: contentJson,
         source: 'rule_engine',
+        changeReason: null,
         aiPromptLog: `AI 调用耗时 ${aiResult.durationMs}ms，规则引擎生成结构化规划`,
       },
     });
@@ -118,6 +122,16 @@ export class PlanningService {
     await this.prisma.goal.update({
       where: { id: goal.id },
       data: { currentStage: 'planning' },
+    });
+
+    // 记录活动流
+    await this.collaborationService.recordActivity({
+      goalId: goal.id,
+      actorId: userId,
+      type: ActivityEventTypeEnum.PLAN_CREATED,
+      targetType: 'plan',
+      targetId: plan.id,
+      targetTitle: `规划 v${newVersion}`,
     });
 
     this.logger.log(`首版规划已生成: goalId=${goal.id}, version=${newVersion}`);
@@ -202,8 +216,20 @@ export class PlanningService {
         isActive: true,
         content: JSON.stringify(newContent),
         source: 'rule_engine',
+        changeReason: dto.reason,
         aiPromptLog: `[重规划：${dto.reason}] AI 调用耗时 ${aiResult.durationMs}ms`,
       },
+    });
+
+    // 记录活动流
+    await this.collaborationService.recordActivity({
+      goalId: goal.id,
+      actorId: userId,
+      type: ActivityEventTypeEnum.PLAN_REPLANNED,
+      targetType: 'plan',
+      targetId: plan.id,
+      targetTitle: `规划 v${newVersion}`,
+      detail: dto.reason,
     });
 
     this.logger.log(`重规划完成: goalId=${goal.id}, version=${currentPlan.version} → ${newVersion}`);
@@ -278,6 +304,16 @@ export class PlanningService {
       data: { isActive: true },
     });
 
+    // 记录活动流
+    await this.collaborationService.recordActivity({
+      goalId: goal.id,
+      actorId: userId,
+      type: ActivityEventTypeEnum.PLAN_ACTIVATED,
+      targetType: 'plan',
+      targetId: plan.id,
+      targetTitle: `规划 v${version}`,
+    });
+
     this.logger.log(`切换活跃版本: goalId=${goal.id}, version=${version}`);
     return this.toPlanResponse(plan);
   }
@@ -343,6 +379,7 @@ export class PlanningService {
     isActive: boolean;
     content: string;
     source: string;
+    changeReason: string | null;
     aiPromptLog: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -354,9 +391,8 @@ export class PlanningService {
       isActive: plan.isActive,
       content: JSON.parse(plan.content) as PlanContent,
       source: plan.source as 'rule_engine' | 'ai' | 'hybrid',
-      replanReason: plan.aiPromptLog?.startsWith('[重规划')
-        ? plan.aiPromptLog.match(/\[重规划：([^\]]+)\]/)?.[1] ?? null
-        : null,
+      changeReason: plan.changeReason,
+      replanReason: plan.changeReason,
       createdAt: plan.createdAt.toISOString(),
       updatedAt: plan.updatedAt.toISOString(),
     };
