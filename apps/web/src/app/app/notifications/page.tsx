@@ -3,8 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import {
-  NotificationTypeEnum,
-  NOTIFICATION_TYPE_LABELS,
   type NotificationResponseDto,
   type UnreadCountResponseDto,
 } from "@ai-task-manager/shared";

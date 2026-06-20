@@ -13,11 +13,25 @@
   --color-success: #6f907c;
   --color-warning: #b69042;
   --color-danger: #b45a42;
+  --color-info: #5b7a99; /* 信息态 */
   --color-border: #e8e2d6; /* 边框色 */
 
   /* 字体 token */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* 圆角 token */
+  --radius-sm: 0.375rem; /* 6px - 小元素（Tag/Badge） */
+  --radius-md: 0.5rem; /* 8px - 中等元素（Input/Button） */
+  --radius-lg: 0.75rem; /* 12px - 大元素（Card/Modal） */
+  --radius-xl: 1rem; /* 16px - 容器（Panel） */
+
+  /* 阴影 token */
+  --shadow-xs: 0 1px 2px 0 rgba(43, 41, 38, 0.04);
+  --shadow-sm: 0 1px 3px 0 rgba(43, 41, 38, 0.06), 0 1px 2px -1px rgba(43, 41, 38, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(43, 41, 38, 0.07), 0 2px 4px -2px rgba(43, 41, 38, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(43, 41, 38, 0.08), 0 4px 6px -4px rgba(43, 41, 38, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(43, 41, 38, 0.1), 0 8px 10px -6px rgba(43, 41, 38, 0.06);
 }
 
 body {
@@ -40,4 +54,70 @@ body {
 
 .animate-rise {
   animation: rise 0.22s ease-out;
+}
+
+/* 骨架屏脉冲 */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-muted) 25%,
+    var(--color-border) 50%,
+    var(--color-muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Toast 滑入 */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.25s ease-out;
+}
+
+/* Modal 淡入 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.18s ease-out;
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.18s ease-out;
 }
