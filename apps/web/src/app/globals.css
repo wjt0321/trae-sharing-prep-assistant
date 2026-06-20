@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* 色彩 token - Warm Editorial 风格 */
+  --color-canvas: #f8f6f1; /* 页面底色 */
+  --color-surface: #ffffff; /* 卡片/面板底色 */
+  --color-muted: #f1ece4; /* 次级底色 */
+  --color-ink: #2b2926; /* 主文字色 */
+  --color-secondary: #5f5a53; /* 辅助文字 */
+  --color-tertiary: #8c857b; /* 弱化文字 */
+  --color-accent: #c96a3d; /* 强调色 */
+  --color-accent-hover: #b85b31; /* 悬停态 */
+  --color-success: #6f907c;
+  --color-warning: #b69042;
+  --color-danger: #b45a42;
+  --color-border: #e8e2d6; /* 边框色 */
+
+  /* 字体 token */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* 淡入上移动画 */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.22s ease-out;
+}

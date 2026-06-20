@@ -1,0 +1,17 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "legacy-demo"
+
+# 忽略某些原生依赖的构建（来自 create-next-app 默认配置）
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
+
+# 允许运行构建脚本的依赖（pnpm 10+ 默认会忽略）
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - bcrypt
+  - esbuild
+  - prisma

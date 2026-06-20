@@ -2,72 +2,108 @@
 
 ## 项目概览
 
-- 项目名称：`分享会筹备助手`
-- 项目类型：`React + Vite + Tailwind CSS` 单页 Web Demo
-- 目标：为 `TRAE AI 创造力大赛` 初赛提供一个可运行、可截图、可录屏的最小体验产品
-- 核心场景：用户输入一个分享目标，页面输出结构化的筹备阶段、行动清单与提醒信息
+- 项目名称：`AI 任务管家`（从 `分享会筹备助手` 比赛版升级而来）
+- 项目类型：前后端分离的 Monorepo 长期产品骨架
+- 目标：把模糊的想法拆成可推进的步骤，覆盖"灵感到执行"全链路
+- 比赛背景：`TRAE AI 创造力大赛`，原单页 Demo 保留在 `legacy-demo/`
 
 ## 当前产品范围
 
-- 单页桌面优先工作台
-- 3 个主要状态：
-  - 初始态
-  - 处理中态
-  - 输出态
-- 输出内容聚焦：
-  - 4 个阶段任务卡片
-  - 最终行动清单
-  - 准备重点 / 容易遗漏的事
+- Monorepo 工程骨架（前端 + 后端 + 共享契约层）
+- 后端：NestJS 模块化单体，9 个业务模块骨架 + Prisma + SQLite
+- 前端：Next.js App Router + Warm Editorial 设计系统
+- 原 Demo 保留为 `legacy-demo/`，可独立运行
 
 ## 技术栈
 
-- `React 18`
-- `Vite 5`
-- `Tailwind CSS 3`
-- `Vitest`
+### Monorepo 基础
+
+- `pnpm workspaces` 包管理
+- `TypeScript 5` 全栈类型安全
+
+### 前端（`apps/web`）
+
+- `Next.js 16` + `React 19`
+- `Tailwind CSS 4`（@theme 语法定义 token，无 tailwind.config.js）
+- 自建基础组件库（Button / Card 等，未引入 shadcn/ui CLI）
+
+### 后端（`apps/server`）
+
+- `NestJS 11` + `TypeScript`
+- `Prisma 6` + `SQLite`（Windows 本地可运行，无 Docker/Redis 依赖）
+- 应用内任务 Worker（setInterval 轮询 TaskJob 表，无 BullMQ）
+- 本地文件存储（`uploads/`）
+- AI 网关（mock 模式，无外部 API 依赖）
+- JWT + Passport + bcrypt 鉴权
+
+### 共享契约层（`packages/shared`）
+
+- CommonJS 模块（兼容 NestJS）
+- DTO、枚举、错误码、API 响应结构
 
 ## 目录约定
 
-- `src/App.jsx`
-  - 页面主入口与状态切换
-- `src/components`
-  - 页面 UI 组件
-- `src/data/demoTemplates.js`
-  - 默认演示数据模板
-- `src/lib/planner.js`
-  - 本地规划逻辑
-- `src/lib/planner.test.js`
-  - 规划逻辑测试
-- `src/styles/globals.css`
-  - 全局样式与视觉 token
-- `project-docs/赛前准备`
-  - 历史方案、比赛资料、草稿与提示词归档
-- `project-docs/项目文档`
-  - 后续新增的正式项目文档
-- `project-docs/初赛文档`
-  - 初赛阶段实战 MVP 改造规划、实施步骤与代码级任务单
-- `docs/`
-  - GitHub Pages 静态发布产物，由构建生成
+```
+competition_notes/
+├── apps/
+│   ├── web/                      # Next.js 前端
+│   │   └── src/
+│   │       ├── app/              # App Router 页面
+│   │       ├── components/       # UI 组件
+│   │       │   └── ui/           # 基础组件（Button/Card 等）
+│   │       └── lib/              # 工具函数
+│   └── server/                   # NestJS 后端
+│       ├── src/
+│       │   ├── infrastructure/   # Prisma / TaskWorker / AiGateway / Storage
+│       │   ├── modules/          # 9 个业务模块
+│       │   └── presentation/     # Health / 异常过滤器 / 响应拦截器
+│       ├── prisma/               # schema + migrations + seed
+│       └── uploads/              # 本地文件存储
+├── packages/
+│   └── shared/                   # 前后端共享契约（CJS）
+├── legacy-demo/                  # 原比赛版单页 Demo（React + Vite）
+├── project-docs/
+│   ├── 实施清单/                  # 12 份分阶段实施清单
+│   ├── 项目文档/                  # 正式项目文档
+│   ├── 初赛文档/                  # 初赛 MVP 改造规划
+│   ├── 赛前准备/                  # 历史方案、比赛资料、草稿
+│   └── 未来方向/                  # 答辩与收口材料
+├── docs/                         # legacy-demo 的 GitHub Pages 产物
+├── pnpm-workspace.yaml
+└── package.json                  # 根 workspace 脚本
+```
 
 ## 文档规则
 
-- 不要再把新文档直接丢到 `docs` 根目录
 - 新增项目资料统一放到 `project-docs/项目文档`
 - 历史草稿、赛前分析、旧方案归档到 `project-docs/赛前准备`
 - MVP 改造相关规划与任务单放到 `project-docs/初赛文档`
-- `docs/` 仅保留构建后的静态站内容
+- 分阶段实施清单放在 `project-docs/实施清单`
+- `docs/` 仅保留 legacy-demo 的 GitHub Pages 静态站内容
 
 ## 开发原则
 
-- 保持 Demo 聚焦，不扩展成万能 AI 助手
-- 优先保证“输入 -> 结构化输出”的演示闭环
-- 优先保证截图和录屏效果，而不是堆复杂功能
-- 不随意加入后端、数据库、登录、多人协作等超范围能力
+- 前后端分离，共享契约层保证类型一致
+- 后端模块化单体，避免过早微服务化
+- 优先保证 Windows 本地可运行（SQLite + 本地文件存储，无外部依赖）
 - 页面表达要像真实产品，不像聊天套壳或后台系统
+- 保持 Warm Editorial 视觉风格的一致性
 
 ## 内容与视觉约束
 
-- 视觉风格：暖中性色、克制、清爽、适合比赛展示
+- 视觉风格：暖中性色（Warm Editorial + Minimal Product）、克制、清爽
+- 设计系统 token（在 `apps/web/src/app/globals.css` 的 `@theme inline` 中定义）：
+  - `canvas` (#F8F6F1) — 页面底色
+  - `surface` (#FFFFFF) — 卡片/面板底色
+  - `muted` (#F1ECE4) — 次级底色
+  - `ink` (#2B2926) — 主文字色
+  - `secondary` (#5F5A53) — 辅助文字
+  - `tertiary` (#8C857B) — 弱化文字
+  - `accent` (#C96A3D) — 强调色（按钮、标记点）
+  - `accent-hover` (#B85B31) — 悬停态
+  - `success` (#6F907C) / `warning` (#B69042) / `danger` (#B45A42) — 语义色
+  - `border` (#E8E2D6) — 边框色
+- 动画：`.animate-rise`（淡入上移 220ms）
 - 避免：
   - 紫粉蓝大渐变
   - 玻璃拟态
@@ -79,33 +115,104 @@
   - 生成可执行路径
   - 输出结构化结果
 
+## 架构概览
+
+```
+                    ┌─────────────────────────┐
+                    │   apps/web (Next.js)    │
+                    │   http://localhost:3000 │
+                    └────────────┬────────────┘
+                                 │ /api/server/* (rewrites 代理)
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  apps/server (NestJS)   │
+                    │  http://localhost:4000  │
+                    │  全局前缀 /api           │
+                    └────────────┬────────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                  │                  │
+              ▼                  ▼                  ▼
+     ┌────────────────┐ ┌──────────────┐ ┌────────────────┐
+     │  Prisma + DB   │ │ TaskWorker   │ │  AiGateway     │
+     │  (SQLite)      │ │ (轮询 TaskJob)│ │  (mock 模式)   │
+     └────────────────┘ └──────────────┘ └────────────────┘
+
+     后端 9 个业务模块：
+     auth / workspace / goal / planning / execution
+     knowledge / collaboration / export / integration
+
+     共享契约层 packages/shared（CJS）：
+     DTO + 枚举 + 错误码 + API 响应结构
+```
+
+**后端核心设计**：全局前缀 `/api`（health 除外），全局 ValidationPipe（whitelist + transform），全局异常过滤器，统一响应拦截器（`{success, data, error, timestamp}`）。TaskWorker 用 setInterval 轮询 TaskJob 表，支持重试。AiGateway 在 mock 模式下记录调用日志到 AiCallLog 表。
+
+**前端核心设计**：Next.js App Router，`/api/server/*` 通过 rewrites 代理到后端。设计 token 用 Tailwind 4 `@theme` 语法定义，基础组件手写（Button/Card 等）。
+
+**legacy-demo**：原比赛版单页 Demo 保留在 `legacy-demo/`，独立运行（`cd legacy-demo && npm run dev`），构建产物发布到 `docs/` 供 GitHub Pages 访问。
+
 ## 常用命令
 
 ```bash
+# === Monorepo 根目录 ===
+pnpm install              # 安装所有 workspace 依赖
+pnpm run dev              # 同时启动前后端开发服务器
+pnpm run build            # 构建所有 workspace
+pnpm run typecheck        # 全量类型检查
+
+# === 后端（apps/server）===
+cd apps/server
+pnpm run start:dev        # 启动后端开发服务器（watch 模式）
+pnpm run start:prod       # 生产模式启动（需先 build）
+pnpm run build            # nest build
+pnpm run typecheck        # tsc --noEmit
+pnpm run db:setup         # prisma generate + migrate + seed
+pnpm run db:migrate       # 创建新迁移
+pnpm run db:seed          # 写入种子数据
+pnpm run db:studio        # 打开 Prisma Studio
+pnpm run test             # Jest 单元测试
+
+# === 前端（apps/web）===
+cd apps/web
+pnpm run dev              # 启动前端开发服务器
+pnpm run build            # 构建生产产物
+pnpm run typecheck        # tsc --noEmit
+pnpm run lint             # ESLint
+
+# === 共享包（packages/shared）===
+cd packages/shared
+pnpm run build            # tsc -b（编译到 dist/）
+pnpm run typecheck        # tsc --noEmit
+
+# === legacy-demo（原比赛版）===
+cd legacy-demo
 npm install
-npm run dev
-npm test
-npm run build
+npm run dev               # 启动 Vite 开发服务器
+npm test                  # 运行 Vitest 测试
+npm run build             # 构建到 docs/
 ```
 
 ## 修改后必做检查
 
-- 运行 `npm test`
-- 运行 `npm run build`
+- 后端改动后：`cd apps/server && pnpm run typecheck && pnpm run build`
+- 前端改动后：`cd apps/web && pnpm run typecheck && pnpm run build`
+- 共享包改动后：`cd packages/shared && pnpm run build`（后端依赖 dist/）
+- 数据库 schema 改动后：`cd apps/server && pnpm run db:migrate`
 - 如有新增文档，确认文档放在正确目录
-- 如有改首页文案，确认措辞更像“参赛作品展示页”
 
 ## Git 约定
 
 - 当前仓库已经初始化本地 Git
 - 提交信息建议使用 Conventional Commits
 - 优先使用清晰范围，例如：
-  - `feat(demo): ...`
+  - `feat(server): ...` / `feat(web): ...` / `feat(shared): ...`
   - `docs(project): ...`
   - `fix(ui): ...`
 - 远程仓库：`https://github.com/wjt0321/trae-sharing-prep-assistant`
-- GitHub Pages：`https://wjt0321.github.io/trae-sharing-prep-assistant/`
+- GitHub Pages（legacy-demo）：`https://wjt0321.github.io/trae-sharing-prep-assistant/`
 
-## 推荐演示输入
+## 网络约束
 
-`我要准备一场小型分享会，但我不知道该怎么安排。`
+- 当网络问题阻断远程仓库提交时，使用本地代理端口 10808
+- 使用代理端口 10808 提交后，必须将代理设置恢复原状
