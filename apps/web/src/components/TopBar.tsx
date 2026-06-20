@@ -184,6 +184,13 @@ export function TopBar() {
                 </p>
                 <p className="truncate text-xs text-tertiary">{user?.email}</p>
               </div>
+              <Link
+                href="/app/settings"
+                onClick={() => setUserMenu(false)}
+                className="block px-3 py-2 text-sm text-secondary hover:bg-muted transition-colors"
+              >
+                设置
+              </Link>
               <button
                 onClick={handleLogout}
                 className="block w-full px-3 py-2 text-left text-sm text-danger hover:bg-muted transition-colors"

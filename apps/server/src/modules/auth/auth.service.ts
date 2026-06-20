@@ -8,6 +8,8 @@ import { ApiError, ErrorCode } from '@ai-task-manager/shared';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { RefreshDto } from './dto/refresh.dto';
+import type { UpdateProfileDto } from './dto/update-profile.dto';
+import type { ChangePasswordDto } from './dto/change-password.dto';
 
 interface AccessTokenPayload {
   sub: string;
@@ -162,6 +164,61 @@ export class AuthService {
       },
       data: { revokedAt: new Date() },
     });
+    return { success: true };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new ApiError(ErrorCode.UNAUTHORIZED);
+    }
+
+    const data: { displayName?: string; avatarUrl?: string | null } = {};
+    if (dto.displayName !== undefined) data.displayName = dto.displayName;
+    if (dto.avatarUrl !== undefined) data.avatarUrl = dto.avatarUrl;
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+
+    this.logger.log(`用户资料已更新: ${updated.email}`);
+    return this.toUserResponse(updated, updated.defaultWorkspaceId ?? '');
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new ApiError(ErrorCode.UNAUTHORIZED);
+    }
+
+    const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new ApiError(ErrorCode.AUTH_INVALID_CREDENTIALS, {
+        message: '当前密码不正确',
+      });
+    }
+
+    // 新密码不能与旧密码相同
+    if (dto.currentPassword === dto.newPassword) {
+      throw new ApiError(ErrorCode.BAD_REQUEST, {
+        message: '新密码不能与当前密码相同',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    // 修改密码后吊销所有 session，用户需重新登录
+    await this.prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    this.logger.log(`用户密码已修改: ${user.email}`);
     return { success: true };
   }
 
