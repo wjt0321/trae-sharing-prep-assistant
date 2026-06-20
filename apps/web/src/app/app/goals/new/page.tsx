@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useWorkspace } from "@/lib/workspace";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
@@ -47,6 +47,13 @@ interface GoalForm {
   isCollaborative: boolean;
 }
 
+interface TemplateHints {
+  planHints?: string[];
+  riskHints?: string[];
+  checklist?: string[];
+  templateName?: string;
+}
+
 const SCENARIO_OPTIONS = Object.values(ScenarioTypeEnum).filter(
   (s) => s !== ScenarioTypeEnum.UNKNOWN
 ) as ScenarioTypeEnum[];
@@ -72,6 +79,7 @@ const EMPTY_FORM: GoalForm = {
 
 export default function NewGoalPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { currentWorkspace } = useWorkspace();
   const [step, setStep] = useState<Step>(1);
   const [form, setForm] = useState<GoalForm>(EMPTY_FORM);
@@ -79,6 +87,43 @@ export default function NewGoalPage() {
   const [detecting, setDetecting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [templateHints, setTemplateHints] = useState<TemplateHints | null>(null);
+  const [fromTemplate, setFromTemplate] = useState(false);
+
+  // 从模板预填表单
+  useEffect(() => {
+    if (searchParams.get("from") !== "template") return;
+    try {
+      const prefilledRaw = sessionStorage.getItem("prefillGoalFromTemplate");
+      const hintsRaw = sessionStorage.getItem("templateHints");
+      if (!prefilledRaw) return;
+      const prefilled = JSON.parse(prefilledRaw) as Record<string, unknown>;
+      const newForm: GoalForm = { ...EMPTY_FORM };
+      if (typeof prefilled.topic === "string") newForm.topic = prefilled.topic;
+      if (typeof prefilled.title === "string") newForm.title = prefilled.title;
+      if (typeof prefilled.scenarioType === "string") {
+        newForm.scenarioType = prefilled.scenarioType as ScenarioTypeEnum;
+      }
+      if (typeof prefilled.audience === "string") newForm.audience = prefilled.audience;
+      if (typeof prefilled.duration === "number") newForm.duration = String(prefilled.duration);
+      if (typeof prefilled.shareDate === "string") newForm.shareDate = prefilled.shareDate;
+      if (typeof prefilled.timeConstraint === "string") newForm.timeConstraint = prefilled.timeConstraint;
+      if (typeof prefilled.resourceConstraint === "string") newForm.resourceConstraint = prefilled.resourceConstraint;
+      if (typeof prefilled.priority === "string") {
+        newForm.priority = prefilled.priority as GoalPriorityEnum;
+      }
+      if (typeof prefilled.successCriteria === "string") newForm.successCriteria = prefilled.successCriteria;
+      if (typeof prefilled.isCollaborative === "boolean") newForm.isCollaborative = prefilled.isCollaborative;
+      setForm(newForm);
+      if (hintsRaw) setTemplateHints(JSON.parse(hintsRaw) as TemplateHints);
+      setFromTemplate(true);
+      // 清理 sessionStorage
+      sessionStorage.removeItem("prefillGoalFromTemplate");
+      sessionStorage.removeItem("templateHints");
+    } catch {
+      // ignore parse error
+    }
+  }, [searchParams]);
 
   const update = <K extends keyof GoalForm>(key: K, value: GoalForm[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -100,8 +145,8 @@ export default function NewGoalPage() {
       setForm((f) => ({
         ...f,
         scenarioType: result.primaryScenario,
-        title: result.suggestedTitle,
-        successCriteria: result.suggestedSuccessCriteria[0] ?? "",
+        title: f.title || result.suggestedTitle,
+        successCriteria: f.successCriteria || result.suggestedSuccessCriteria[0] || "",
       }));
       setStep(2);
     } catch (err) {
@@ -147,6 +192,13 @@ export default function NewGoalPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
+      {/* 模板来源提示 */}
+      {fromTemplate && templateHints?.templateName && step === 1 && (
+        <div className="mb-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-accent animate-rise">
+          已从模板「{templateHints.templateName}」预填表单，可直接创建或继续调整
+        </div>
+      )}
+
       {/* 步骤指示器 */}
       <StepIndicator step={step} />
 
@@ -163,6 +215,7 @@ export default function NewGoalPage() {
             onChange={(v) => update("topic", v)}
             onDetect={handleDetect}
             detecting={detecting}
+            templateHints={templateHints}
           />
         )}
 
@@ -244,11 +297,13 @@ function Step1Input({
   onChange,
   onDetect,
   detecting,
+  templateHints,
 }: {
   topic: string;
   onChange: (v: string) => void;
   onDetect: () => void;
   detecting: boolean;
+  templateHints?: TemplateHints | null;
 }) {
   const examples = [
     "下周三给团队做一次技术分享",
@@ -284,6 +339,41 @@ function Step1Input({
           按 Ctrl/⌘ + Enter 快速识别
         </p>
       </div>
+
+      {/* 模板提示 */}
+      {templateHints && (templateHints.planHints?.length || templateHints.checklist?.length) && (
+        <div className="mt-5 rounded-xl border border-accent/30 bg-accent/5 p-4">
+          <p className="text-xs font-medium text-accent">
+            来自模板的参考要点
+          </p>
+          {templateHints.planHints && templateHints.planHints.length > 0 && (
+            <div className="mt-2">
+              <p className="text-[11px] text-tertiary">规划阶段</p>
+              <ul className="mt-1 space-y-1">
+                {templateHints.planHints.map((h, i) => (
+                  <li key={i} className="flex gap-2 text-xs text-secondary">
+                    <span className="text-accent">·</span>
+                    <span>{h}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {templateHints.checklist && templateHints.checklist.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[11px] text-tertiary">执行检查清单</p>
+              <ul className="mt-1 space-y-1">
+                {templateHints.checklist.map((item, i) => (
+                  <li key={i} className="flex gap-2 text-xs text-secondary">
+                    <span className="text-success">✓</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-6">
         <p className="text-xs font-medium text-tertiary">需要灵感？试试这些</p>

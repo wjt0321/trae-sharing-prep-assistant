@@ -49,6 +49,8 @@ export default function GoalDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   useEffect(() => {
     api
@@ -129,6 +131,13 @@ export default function GoalDetailPage() {
           >
             {deleting ? "删除中..." : "删除"}
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowTemplateModal(true)}
+          >
+            沉淀为模板
+          </Button>
           <div className="ml-auto flex gap-2">
             <Link href={`/app/goals/${goal.id}/plan`}>
               <Button variant="secondary" size="sm">
@@ -147,6 +156,21 @@ export default function GoalDetailPage() {
             </Link>
           </div>
         </div>
+      )}
+
+      {showTemplateModal && (
+        <SaveAsTemplateModal
+          goalId={goal.id}
+          goalTitle={goal.title || goal.topic}
+          onClose={() => setShowTemplateModal(false)}
+          onSaved={() => {
+            setShowTemplateModal(false);
+            setError("已沉淀为模板，可在模板库查看");
+            setTimeout(() => setError(null), 3000);
+          }}
+          saving={savingTemplate}
+          setSaving={setSavingTemplate}
+        />
       )}
     </main>
   );
@@ -365,6 +389,112 @@ function EditGoalForm({
         <Button onClick={handleSave} disabled={saving}>
           {saving ? "保存中..." : "保存"}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 沉淀为模板弹层
+// ============================================================
+function SaveAsTemplateModal({
+  goalId,
+  goalTitle,
+  onClose,
+  onSaved,
+  saving,
+  setSaving,
+}: {
+  goalId: string;
+  goalTitle: string;
+  onClose: () => void;
+  onSaved: () => void;
+  saving: boolean;
+  setSaving: (b: boolean) => void;
+}) {
+  const [name, setName] = useState(`${goalTitle} · 模板`);
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      setError("模板名称不能为空");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.post(`/goals/${goalId}/templates`, {
+        name: name.trim(),
+        description: description.trim() || undefined,
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "沉淀失败");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 animate-rise"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold text-ink">沉淀为模板</h2>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-tertiary hover:bg-muted hover:text-ink"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <p className="mt-2 text-xs text-tertiary">
+          把当前目标的字段（场景、约束、成功标准等）保存为模板，下次创建目标可直接套用
+        </p>
+
+        {error && (
+          <div className="mt-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-4 space-y-4">
+          <Input
+            label="模板名称"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="给模板起个名字"
+          />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink">
+              描述（可选）
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="这个模板适合什么场景？"
+              className="w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-tertiary focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+              rows={2}
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
+            取消
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "沉淀中..." : "沉淀为模板"}
+          </Button>
+        </div>
       </div>
     </div>
   );

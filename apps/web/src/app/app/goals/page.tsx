@@ -65,9 +65,14 @@ export default function GoalsPage() {
             把想法变成可推进的目标
           </p>
         </div>
-        <Link href="/app/goals/new">
-          <Button>创建目标</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/app/templates">
+            <Button variant="secondary">从模板创建</Button>
+          </Link>
+          <Link href="/app/goals/new">
+            <Button>创建目标</Button>
+          </Link>
+        </div>
       </div>
 
       {/* 阶段筛选 */}

@@ -287,9 +287,11 @@ model Template {
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name         String
   description  String?
-  // 模板分类
-  category     String
-  // 模板内容（JSON 字符串）
+  // 模板分类：scenario | personal | team | official
+  category     String   @default("personal")
+  // 关联场景类型（场景模板必填，参考 ScenarioTypeEnum）
+  scenarioType String?
+  // 模板内容（JSON 字符串，参考 TemplateContentDto）
   content      String
   // 是否为系统内置
   isBuiltIn    Boolean  @default(false)
@@ -301,6 +303,7 @@ model Template {
 
   @@index([workspaceId])
   @@index([category])
+  @@index([scenarioType])
 }
 
 model KnowledgeAsset {
@@ -315,11 +318,14 @@ model KnowledgeAsset {
   tags         String?
   // 来源目标 ID（可空，表示手动创建）
   sourceGoalId String?
+  // 创建者 ID（可空，系统沉淀的资产无创建者）
+  creatorId    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([workspaceId])
   @@index([type])
+  @@index([creatorId])
 }
 
 // ============================================================

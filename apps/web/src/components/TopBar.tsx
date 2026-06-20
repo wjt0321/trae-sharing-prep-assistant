@@ -131,6 +131,26 @@ export function TopBar() {
             目标
           </Link>
           <Link
+            href="/app/templates"
+            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+              pathname?.startsWith("/app/templates")
+                ? "bg-muted text-ink font-medium"
+                : "text-secondary hover:bg-muted"
+            }`}
+          >
+            模板库
+          </Link>
+          <Link
+            href="/app/assets"
+            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+              pathname?.startsWith("/app/assets")
+                ? "bg-muted text-ink font-medium"
+                : "text-secondary hover:bg-muted"
+            }`}
+          >
+            知识库
+          </Link>
+          <Link
             href="/app/workspaces"
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
               pathname?.startsWith("/app/workspaces")

@@ -109,6 +109,21 @@ export default function ExportsPage() {
       });
   };
 
+  const handleSaveAsAsset = async (item: ExportListItemDto) => {
+    if (!confirm(`把「${item.title}」沉淀为知识资产？`)) return;
+    try {
+      await api.post(`/exports/${item.id}/assets`, {
+        title: item.title,
+        type: "case",
+        tags: item.type,
+      });
+      setError(`已沉淀为知识资产，可在知识资产库查看`);
+      setTimeout(() => setError(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "沉淀失败");
+    }
+  };
+
   if (loading) {
     return (
       <main className="mx-auto w-full max-w-5xl px-6 py-10">
@@ -310,6 +325,12 @@ export default function ExportsPage() {
                       复制链接
                     </button>
                   )}
+                  <button
+                    onClick={() => handleSaveAsAsset(item)}
+                    className="rounded px-2 py-1 text-xs text-accent hover:bg-muted"
+                  >
+                    沉淀为资产
+                  </button>
                   <button
                     onClick={() => handleDelete(item.id)}
                     className="rounded px-2 py-1 text-xs text-tertiary hover:bg-muted hover:text-danger"
