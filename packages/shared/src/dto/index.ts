@@ -11,3 +11,5 @@ export * from './workspace.dto.js';
 export * from './task-job.dto.js';
 export * from './auth.dto.js';
 export * from './ai-config.dto.js';
+export * from './prompt-template.dto.js';
+export * from './ai-stats.dto.js';

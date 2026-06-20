@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, MaxLength, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { UpdateAiProviderConfigDto, TestAiConfigDto } from '@ai-task-manager/shared';
 
 /** 更新 AI 网关配置（输入验证） */
@@ -45,4 +46,24 @@ export class TestAiConfigInputDto implements TestAiConfigDto {
   @IsNotEmpty()
   @MaxLength(128)
   modelName: string;
+}
+
+/** 单条消息（流式对话用） */
+export class ChatMessageInputDto {
+  @IsString()
+  @IsNotEmpty()
+  role: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(8000)
+  content: string;
+}
+
+/** 流式对话（输入验证） */
+export class ChatStreamInputDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChatMessageInputDto)
+  messages: ChatMessageInputDto[];
 }

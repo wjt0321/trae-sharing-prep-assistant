@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AiGatewayService } from '../../infrastructure/ai-gateway/ai-gateway.service';
+import { PromptRegistryService } from '../prompt-registry/prompt-registry.service';
 import { PlanEngine } from './plan-engine';
 import { CollaborationService } from '../collaboration/collaboration.service';
 import { NotificationService } from '../notification/notification.service';
@@ -22,6 +23,7 @@ export class PlanningService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiGateway: AiGatewayService,
+    private readonly promptRegistry: PromptRegistryService,
     private readonly planEngine: PlanEngine,
     private readonly collaborationService: CollaborationService,
     private readonly notificationService: NotificationService,
@@ -79,13 +81,19 @@ export class PlanningService {
       }
     }
 
+    // 从 Prompt Registry 解析提示词（找不到则回退到内联）
+    const rendered = await this.promptRegistry.renderForCall('plan.generate', {
+      topic: goal.topic,
+      scenarioType: goal.scenarioType ?? 'unknown',
+    });
+    const messages = rendered?.messages ?? [
+      { role: 'system', content: '你是规划引擎，负责把目标拆解为结构化的阶段、任务、风险与里程碑。' },
+      { role: 'user', content: `目标：${goal.topic}\n场景：${goal.scenarioType ?? 'unknown'}` },
+    ];
     // 调用 AI 网关（mock 模式下仅记录日志）
     const aiResult = await this.aiGateway.chat({
       promptName: 'plan.generate',
-      messages: [
-        { role: 'system', content: '你是规划引擎，负责把目标拆解为结构化的阶段、任务、风险与里程碑。' },
-        { role: 'user', content: `目标：${goal.topic}\n场景：${goal.scenarioType ?? 'unknown'}` },
-      ],
+      messages,
     });
     this.logger.debug(`规划 AI 调用: ${aiResult.durationMs}ms`);
 
@@ -186,13 +194,19 @@ export class PlanningService {
       throw new ApiError(ErrorCode.GOAL_NOT_FOUND);
     }
 
+    // 从 Prompt Registry 解析提示词（找不到则回退到内联）
+    const rendered = await this.promptRegistry.renderForCall('plan.replan', {
+      reason: dto.reason,
+      topic: updatedGoal.topic,
+    });
+    const messages = rendered?.messages ?? [
+      { role: 'system', content: '你是重规划引擎，根据约束变化重新生成规划。' },
+      { role: 'user', content: `重规划原因：${dto.reason}\n目标：${updatedGoal.topic}` },
+    ];
     // 调用 AI 网关记录
     const aiResult = await this.aiGateway.chat({
       promptName: 'plan.replan',
-      messages: [
-        { role: 'system', content: '你是重规划引擎，根据约束变化重新生成规划。' },
-        { role: 'user', content: `重规划原因：${dto.reason}\n目标：${updatedGoal.topic}` },
-      ],
+      messages,
     });
 
     // 规则引擎重规划

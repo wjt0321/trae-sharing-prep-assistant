@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AiGatewayService } from '../../infrastructure/ai-gateway/ai-gateway.service';
+import { PromptRegistryService } from '../prompt-registry/prompt-registry.service';
 import {
   ApiError,
   ErrorCode,
@@ -48,6 +49,7 @@ export class GoalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiGateway: AiGatewayService,
+    private readonly promptRegistry: PromptRegistryService,
   ) {}
 
   // ============================================================
@@ -187,13 +189,16 @@ export class GoalService {
   // ============================================================
 
   async detectScenario(dto: DetectScenarioDto) {
+    // 从 Prompt Registry 解析提示词（找不到则回退到内联）
+    const rendered = await this.promptRegistry.renderForCall('goal.detect_scenario', { topic: dto.topic });
+    const messages = rendered?.messages ?? [
+      { role: 'system', content: '你是目标场景识别助手，负责把用户的模糊目标归类到预设场景。' },
+      { role: 'user', content: `目标：${dto.topic}` },
+    ];
     // 调用 AI 网关（mock 模式下仅记录日志，实际识别用本地关键词匹配）
     const aiResult = await this.aiGateway.chat({
       promptName: 'goal.detect_scenario',
-      messages: [
-        { role: 'system', content: '你是目标场景识别助手，负责把用户的模糊目标归类到预设场景。' },
-        { role: 'user', content: `目标：${dto.topic}` },
-      ],
+      messages,
     });
     this.logger.debug(`场景识别 AI 调用: ${aiResult.durationMs}ms`);
 

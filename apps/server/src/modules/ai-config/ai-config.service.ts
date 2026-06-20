@@ -10,6 +10,10 @@ import {
   type UpdateAiProviderConfigDto,
   type TestAiConfigDto,
   type TestAiConfigResultDto,
+  type AiCallStatsDto,
+  type ModelStatDto,
+  type DailyStatDto,
+  type PromptStatDto,
 } from '@ai-task-manager/shared';
 
 /**
@@ -154,4 +158,140 @@ export class AiConfigService {
     }
     return this.aiGateway.testConnection(dto);
   }
+
+  /**
+   * 获取 AI 调用统计（成本统计）
+   * 基于 AiCallLog 聚合，按模型定价估算成本。
+   */
+  async getStats(days: number): Promise<AiCallStatsDto> {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const logs = await this.prisma.aiCallLog.findMany({
+      where: { createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // 按模型聚合
+    const modelMap = new Map<string, ModelStatDto>();
+    // 按日聚合
+    const dayMap = new Map<string, DailyStatDto>();
+    // 按提示词聚合
+    const promptMap = new Map<string, { count: number; totalDuration: number }>();
+
+    let totalCalls = 0;
+    let totalSuccess = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCostUsd = 0;
+    let totalDuration = 0;
+
+    for (const log of logs) {
+      totalCalls++;
+      if (log.success) totalSuccess++;
+      totalInputTokens += log.inputTokens;
+      totalOutputTokens += log.outputTokens;
+      totalDuration += log.durationMs;
+
+      const cost = this.estimateCost(log.model, log.inputTokens, log.outputTokens);
+      totalCostUsd += cost;
+
+      // 按模型
+      const modelStat = modelMap.get(log.model) ?? {
+        model: log.model,
+        callCount: 0,
+        successCount: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+      };
+      modelStat.callCount++;
+      if (log.success) modelStat.successCount++;
+      modelStat.inputTokens += log.inputTokens;
+      modelStat.outputTokens += log.outputTokens;
+      modelStat.costUsd += cost;
+      modelMap.set(log.model, modelStat);
+
+      // 按日
+      const dateStr = log.createdAt.toISOString().slice(0, 10);
+      const dayStat = dayMap.get(dateStr) ?? {
+        date: dateStr,
+        callCount: 0,
+        successCount: 0,
+        costUsd: 0,
+      };
+      dayStat.callCount++;
+      if (log.success) dayStat.successCount++;
+      dayStat.costUsd += cost;
+      dayMap.set(dateStr, dayStat);
+
+      // 按提示词
+      if (log.promptName) {
+        const promptStat = promptMap.get(log.promptName) ?? { count: 0, totalDuration: 0 };
+        promptStat.count++;
+        promptStat.totalDuration += log.durationMs;
+        promptMap.set(log.promptName, promptStat);
+      }
+    }
+
+    const byPrompt: PromptStatDto[] = Array.from(promptMap.entries())
+      .map(([name, stat]) => ({
+        promptName: name,
+        callCount: stat.count,
+        avgDurationMs: stat.count > 0 ? Math.round(stat.totalDuration / stat.count) : 0,
+      }))
+      .sort((a, b) => b.callCount - a.callCount);
+
+    return {
+      days,
+      totalCalls,
+      totalSuccess,
+      totalInputTokens,
+      totalOutputTokens,
+      totalCostUsd: Math.round(totalCostUsd * 10000) / 10000,
+      avgDurationMs: totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0,
+      byModel: Array.from(modelMap.values()).sort((a, b) => b.callCount - a.callCount),
+      byDay: Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
+      byPrompt,
+    };
+  }
+
+  // ============================================================
+  // 内部方法
+  // ============================================================
+
+  /**
+   * 按模型估算成本（美元）
+   * 定价表：每 1M token 的价格（input / output）
+   * 数据来源：各模型官方定价页，2026-06 参考
+   */
+  private estimateCost(model: string, inputTokens: number, outputTokens: number): number {
+    const pricing = MODEL_PRICING[model];
+    if (!pricing) {
+      // 未知模型（含 mock-model）不计成本
+      return 0;
+    }
+    return (
+      (inputTokens / 1_000_000) * pricing.inputPerMillion +
+      (outputTokens / 1_000_000) * pricing.outputPerMillion
+    );
+  }
 }
+
+/**
+ * 模型定价表（每 1M token，单位：美元）
+ * 数据来源：各模型官方定价页，2026-06 参考
+ * 未列出的模型（含 mock-model）不计成本
+ */
+const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
+  'gpt-4o': { inputPerMillion: 2.5, outputPerMillion: 10 },
+  'gpt-4o-mini': { inputPerMillion: 0.15, outputPerMillion: 0.6 },
+  'gpt-4-turbo': { inputPerMillion: 10, outputPerMillion: 30 },
+  'gpt-4': { inputPerMillion: 30, outputPerMillion: 60 },
+  'gpt-3.5-turbo': { inputPerMillion: 0.5, outputPerMillion: 1.5 },
+  'claude-3-5-sonnet-20241022': { inputPerMillion: 3, outputPerMillion: 15 },
+  'claude-3-5-haiku-20241022': { inputPerMillion: 0.8, outputPerMillion: 4 },
+  'claude-3-opus-20240229': { inputPerMillion: 15, outputPerMillion: 75 },
+  'deepseek-chat': { inputPerMillion: 0.14, outputPerMillion: 0.28 },
+  'deepseek-reasoner': { inputPerMillion: 0.55, outputPerMillion: 2.19 },
+};

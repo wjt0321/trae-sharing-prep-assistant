@@ -195,6 +195,51 @@ async function main() {
   }
   console.log(`已创建 ${templates.length} 个系统内置模板`);
 
+  // 7. 创建内置提示词模板（Prompt Registry）
+  const promptTemplates = [
+    {
+      name: 'goal.detect_scenario',
+      description: '目标场景识别：把用户的模糊目标归类到预设场景',
+      systemPrompt: '你是目标场景识别助手，负责把用户的模糊目标归类到预设场景。',
+      userTemplate: '目标：{{topic}}',
+      variables: ['topic'],
+    },
+    {
+      name: 'plan.generate',
+      description: '规划生成：把目标拆解为结构化的阶段、任务、风险与里程碑',
+      systemPrompt: '你是规划引擎，负责把目标拆解为结构化的阶段、任务、风险与里程碑。',
+      userTemplate: '目标：{{topic}}\n场景：{{scenarioType}}',
+      variables: ['topic', 'scenarioType'],
+    },
+    {
+      name: 'plan.replan',
+      description: '重规划：根据约束变化重新生成规划',
+      systemPrompt: '你是重规划引擎，根据约束变化重新生成规划。',
+      userTemplate: '重规划原因：{{reason}}\n目标：{{topic}}',
+      variables: ['reason', 'topic'],
+    },
+  ];
+
+  for (const tpl of promptTemplates) {
+    const existing = await prisma.promptTemplate.findFirst({
+      where: { name: tpl.name },
+    });
+    if (!existing) {
+      await prisma.promptTemplate.create({
+        data: {
+          name: tpl.name,
+          description: tpl.description,
+          systemPrompt: tpl.systemPrompt,
+          userTemplate: tpl.userTemplate,
+          variablesJson: JSON.stringify(tpl.variables),
+          version: 1,
+          isActive: true,
+        },
+      });
+    }
+  }
+  console.log(`已创建 ${promptTemplates.length} 个内置提示词模板`);
+
   console.log('种子数据写入完成');
 }
 

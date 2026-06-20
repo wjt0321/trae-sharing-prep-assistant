@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { api } from "@/lib/api";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { api, tokenStorage } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { PageHeader } from "@/components/layout/PageContainer";
@@ -15,6 +16,11 @@ import { PageHeader } from "@/components/layout/PageContainer";
 // - 不硬编码：URL / API Key / 模型名由用户在此页设置
 // - 隐式存储：配置加密存入数据库，不落明文配置文件
 // - 不主动泄露：API Key 读取时掩码，输入框为密码类型
+//
+// 面板：
+// 1. 配置表单（服务商/URL/Key/模型）
+// 2. 流式对话试用（SSE 实时展示）
+// 3. 调用统计（成本/token/调用次数）
 // ============================================================
 
 interface AiConfig {
@@ -34,15 +40,46 @@ interface TestResult {
   errorMessage: string | null;
 }
 
+interface AiCallStats {
+  days: number;
+  totalCalls: number;
+  totalSuccess: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCostUsd: number;
+  avgDurationMs: number;
+  byModel: Array<{
+    model: string;
+    callCount: number;
+    successCount: number;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+  }>;
+  byDay: Array<{
+    date: string;
+    callCount: number;
+    successCount: number;
+    costUsd: number;
+  }>;
+  byPrompt: Array<{
+    promptName: string;
+    callCount: number;
+    avgDurationMs: number;
+  }>;
+}
+
 const PROVIDER_OPTIONS = [
   { label: "OpenAI 兼容", value: "openai" },
   { label: "Anthropic（兼容代理）", value: "anthropic" },
   { label: "自定义", value: "custom" },
 ];
 
+// 默认示例使用 DeepSeek（OpenAI 兼容协议）
+// 用户可自行替换为其他服务商，URL/Key/模型名均不硬编码在代码逻辑中
 const PROVIDER_PRESETS: Record<string, { baseUrl: string; modelName: string }> = {
-  openai: { baseUrl: "https://api.openai.com/v1", modelName: "gpt-4o-mini" },
-  anthropic: { baseUrl: "", modelName: "" },
+  openai: { baseUrl: "https://api.deepseek.com", modelName: "deepseek-v4-flash" },
+  anthropic: { baseUrl: "https://api.deepseek.com/anthropic", modelName: "deepseek-v4-flash" },
   custom: { baseUrl: "", modelName: "" },
 };
 
@@ -60,6 +97,17 @@ export default function AiConfigSettingsPage() {
   const [modelName, setModelName] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
+
+  // 流式对话试用
+  const [streamInput, setStreamInput] = useState("你好，请用一句话介绍你自己。");
+  const [streamOutput, setStreamOutput] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const streamAbortRef = useRef<AbortController | null>(null);
+
+  // 调用统计
+  const [stats, setStats] = useState<AiCallStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsDays, setStatsDays] = useState(30);
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
@@ -165,6 +213,92 @@ export default function AiConfigSettingsPage() {
     }
   }
 
+  // 流式对话（SSE）
+  async function handleStream() {
+    if (!streamInput.trim()) {
+      error("请输入对话内容");
+      return;
+    }
+    setStreaming(true);
+    setStreamOutput("");
+    const abort = new AbortController();
+    streamAbortRef.current = abort;
+
+    try {
+      const token = tokenStorage.getAccess();
+      const res = await fetch("/api/server/ai-config/chat/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: streamInput.trim() }],
+        }),
+        signal: abort.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          try {
+            const data = JSON.parse(trimmed.slice(5).trim());
+            if (data.content) {
+              setStreamOutput((prev) => prev + data.content);
+            }
+            if (data.error) {
+              error(`流式错误：${data.error}`);
+            }
+          } catch {
+            // skip
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        error(err instanceof Error ? err.message : "流式调用失败");
+      }
+    } finally {
+      setStreaming(false);
+      streamAbortRef.current = null;
+    }
+  }
+
+  function handleStopStream() {
+    streamAbortRef.current?.abort();
+  }
+
+  // 调用统计
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const data = await api.get<AiCallStats>(`/ai-config/stats?days=${statsDays}`);
+      setStats(data);
+    } catch {
+      error("加载统计失败");
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [statsDays, error]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
   if (loading) {
     return (
       <div>
@@ -206,7 +340,7 @@ export default function AiConfigSettingsPage() {
           label="接口地址（Base URL）"
           value={baseUrl}
           onChange={(e) => setBaseUrl(e.target.value)}
-          placeholder="https://api.openai.com/v1"
+          placeholder="https://api.deepseek.com"
           type="url"
         />
         <p className="-mt-3 text-xs text-tertiary">
@@ -246,7 +380,7 @@ export default function AiConfigSettingsPage() {
           label="模型名称"
           value={modelName}
           onChange={(e) => setModelName(e.target.value)}
-          placeholder="gpt-4o-mini"
+          placeholder="deepseek-v4-flash / deepseek-v4-pro"
           maxLength={128}
         />
 
@@ -311,6 +445,141 @@ export default function AiConfigSettingsPage() {
           <li>• API Key 仅在调用 AI 时于内存中解密，不记录到日志</li>
           <li>• 配置存储于本地 SQLite 数据库文件，不硬编码在代码中</li>
         </ul>
+      </div>
+
+      {/* 流式对话试用 */}
+      <div className="mt-8">
+        <h3 className="mb-3 text-sm font-medium text-ink">流式对话试用</h3>
+        <div className="max-w-lg space-y-3">
+          <Textarea
+            value={streamInput}
+            onChange={(e) => setStreamInput(e.target.value)}
+            placeholder="输入对话内容，点击发送后将流式返回"
+            rows={2}
+          />
+          <div className="flex gap-2">
+            {!streaming ? (
+              <Button onClick={handleStream} disabled={!streamInput.trim()}>
+                发送
+              </Button>
+            ) : (
+              <Button variant="danger" onClick={handleStopStream}>
+                停止
+              </Button>
+            )}
+          </div>
+          {streamOutput && (
+            <div className="rounded-lg border border-border bg-muted p-3">
+              <p className="whitespace-pre-wrap text-sm text-ink">{streamOutput}</p>
+            </div>
+          )}
+          {!streamOutput && !streaming && (
+            <p className="text-xs text-tertiary">
+              {config?.configured
+                ? "已接入真实模型，发送后将流式返回模型回复"
+                : "当前为 mock 模式，发送后将返回模拟流式内容"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* 调用统计 */}
+      <div className="mt-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-medium text-ink">调用统计</h3>
+          <div className="flex items-center gap-2">
+            <Select
+              value={String(statsDays)}
+              onChange={(e) => setStatsDays(Number(e.target.value))}
+              options={[
+                { label: "最近 7 天", value: "7" },
+                { label: "最近 30 天", value: "30" },
+                { label: "最近 90 天", value: "90" },
+              ]}
+            />
+            <Button variant="ghost" onClick={loadStats} disabled={statsLoading} className="px-2 py-1 text-xs">
+              刷新
+            </Button>
+          </div>
+        </div>
+
+        {statsLoading ? (
+          <p className="py-4 text-center text-sm text-tertiary">加载中...</p>
+        ) : stats && stats.totalCalls > 0 ? (
+          <div className="space-y-4">
+            {/* 总览 */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-border bg-surface p-3">
+                <p className="text-xs text-tertiary">调用次数</p>
+                <p className="mt-1 text-lg font-semibold text-ink">{stats.totalCalls}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-surface p-3">
+                <p className="text-xs text-tertiary">成功率</p>
+                <p className="mt-1 text-lg font-semibold text-ink">
+                  {stats.totalCalls > 0
+                    ? Math.round((stats.totalSuccess / stats.totalCalls) * 100)
+                    : 0}
+                  %
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-surface p-3">
+                <p className="text-xs text-tertiary">Token 总量</p>
+                <p className="mt-1 text-lg font-semibold text-ink">
+                  {(stats.totalInputTokens + stats.totalOutputTokens).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-surface p-3">
+                <p className="text-xs text-tertiary">估算成本</p>
+                <p className="mt-1 text-lg font-semibold text-ink">
+                  ${stats.totalCostUsd.toFixed(4)}
+                </p>
+              </div>
+            </div>
+
+            {/* 按模型 */}
+            {stats.byModel.length > 0 && (
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <p className="mb-2 text-xs font-medium text-secondary">按模型</p>
+                <div className="space-y-2">
+                  {stats.byModel.map((m) => (
+                    <div key={m.model} className="flex items-center justify-between text-xs">
+                      <span className="text-ink">{m.model}</span>
+                      <div className="flex items-center gap-3 text-tertiary">
+                        <span>{m.callCount} 次</span>
+                        <span>{(m.inputTokens + m.outputTokens).toLocaleString()} token</span>
+                        <span>${m.costUsd.toFixed(4)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 按提示词 */}
+            {stats.byPrompt.length > 0 && (
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <p className="mb-2 text-xs font-medium text-secondary">按提示词</p>
+                <div className="space-y-2">
+                  {stats.byPrompt.map((p) => (
+                    <div key={p.promptName} className="flex items-center justify-between text-xs">
+                      <code className="text-secondary">{p.promptName}</code>
+                      <div className="flex items-center gap-3 text-tertiary">
+                        <span>{p.callCount} 次</span>
+                        <span>平均 {p.avgDurationMs}ms</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border bg-surface py-8 text-center">
+            <p className="text-sm text-tertiary">
+              {stats ? `最近 ${stats.days} 天暂无调用记录` : "暂无统计数据"}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

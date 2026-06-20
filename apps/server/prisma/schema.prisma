@@ -530,3 +530,36 @@ model AiProviderConfig {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+// ============================================================
+// 提示词模板（Prompt Registry）
+// 参考：11_后端平台数据层与AI基础设施实施清单.md §5
+// 设计：
+// - 按 name 索引（如 goal.detect_scenario / plan.generate）
+// - 支持版本号，同一 name 只有一个 isActive=true
+// - userTemplate 支持 {{var}} 占位符，由 AiGateway 渲染
+// ============================================================
+
+model PromptTemplate {
+  id            String   @id @default(uuid())
+  // 模板名（唯一索引，如 goal.detect_scenario）
+  name          String
+  // 描述（便于管理）
+  description   String?
+  // 系统提示词
+  systemPrompt  String
+  // 用户提示词模板（支持 {{var}} 占位符）
+  userTemplate  String
+  // 变量名列表（JSON 数组字符串，如 ["topic","scenarioType"]）
+  variablesJson String   @default("[]")
+  // 版本号（每次更新自增）
+  version       Int      @default(1)
+  // 是否为当前活跃版本（同一 name 只有一个 true）
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([name, version])
+  @@index([name])
+  @@index([isActive])
+}

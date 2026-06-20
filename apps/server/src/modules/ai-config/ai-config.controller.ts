@@ -5,13 +5,17 @@ import {
   Post,
   Delete,
   Body,
+  Query,
+  Res,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AiConfigService } from './ai-config.service';
+import { AiGatewayService } from '../../infrastructure/ai-gateway/ai-gateway.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { UpdateAiConfigInputDto, TestAiConfigInputDto } from './dto/ai-config-input.dto';
+import { UpdateAiConfigInputDto, TestAiConfigInputDto, ChatStreamInputDto } from './dto/ai-config-input.dto';
 
 /**
  * AI 网关配置接口
@@ -22,7 +26,10 @@ import { UpdateAiConfigInputDto, TestAiConfigInputDto } from './dto/ai-config-in
 @Controller('ai-config')
 @UseGuards(JwtAuthGuard)
 export class AiConfigController {
-  constructor(private readonly aiConfigService: AiConfigService) {}
+  constructor(
+    private readonly aiConfigService: AiConfigService,
+    private readonly aiGateway: AiGatewayService,
+  ) {}
 
   /** 获取当前配置（API Key 掩码） */
   @Get()
@@ -48,5 +55,38 @@ export class AiConfigController {
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   testConnection(@Body() dto: TestAiConfigInputDto) {
     return this.aiConfigService.testConnection(dto);
+  }
+
+  /**
+   * 流式对话（SSE）
+   * 直接写入 Response，绕过 ResponseInterceptor。
+   * 前端通过 fetch + ReadableStream 读取。
+   */
+  @Post('chat/stream')
+  @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+  async chatStream(@Body() dto: ChatStreamInputDto, @Res() res: Response) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    try {
+      for await (const chunk of this.aiGateway.chatStream({ messages: dto.messages })) {
+        res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+      }
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
+    } finally {
+      res.end();
+    }
+  }
+
+  /** 获取 AI 调用统计（成本统计） */
+  @Get('stats')
+  getStats(@Query('days') days?: string) {
+    const daysNum = days ? Math.min(Math.max(parseInt(days, 10) || 30, 1), 90) : 30;
+    return this.aiConfigService.getStats(daysNum);
   }
 }

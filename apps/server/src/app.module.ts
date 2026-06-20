@@ -25,6 +25,7 @@ import { ExportModule } from './modules/export/export.module';
 import { IntegrationModule } from './modules/integration/integration.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
+import { PromptRegistryModule } from './modules/prompt-registry/prompt-registry.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { AiConfigModule } from './modules/ai-config/ai-config.module';
     IntegrationModule,
     NotificationModule,
     AiConfigModule,
+    PromptRegistryModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -152,6 +152,29 @@ export class AiGatewayService {
     this.cachedAt = 0;
   }
 
+  /**
+   * 流式 AI 调用（SSE）
+   * 逐块 yield 内容，用于前端实时展示。
+   * 真实模式：解析 OpenAI 兼容的 SSE 流；mock 模式：分块 yield 占位内容。
+   */
+  async *chatStream(params: {
+    messages: Array<{ role: string; content: string }>;
+  }): AsyncGenerator<string> {
+    const config = await this.getActiveConfig();
+    if (config) {
+      try {
+        yield* this.realChatStream(params, config);
+        return;
+      } catch (error) {
+        // 真实流式调用失败，yield 错误提示后回退 mock
+        this.logger.warn(`流式 AI 调用失败，回退 mock: ${error instanceof Error ? error.message : String(error)}`);
+        yield* this.mockChatStream(params);
+        return;
+      }
+    }
+    yield* this.mockChatStream(params);
+  }
+
   // ============================================================
   // 内部方法
   // ============================================================
@@ -264,6 +287,90 @@ export class AiGatewayService {
       outputTokens: Math.ceil(mockContent.length / 4),
       durationMs: Date.now() - startTime,
     };
+  }
+
+  /**
+   * 真实流式调用（OpenAI 兼容协议，stream=true）
+   * 解析 SSE 响应，逐块 yield content delta
+   */
+  private async *realChatStream(
+    params: {
+      messages: Array<{ role: string; content: string }>;
+    },
+    config: ActiveConfig,
+  ): AsyncGenerator<string> {
+    const url = this.buildChatUrl(config.baseUrl);
+    const body = {
+      model: config.modelName,
+      messages: params.messages,
+      stream: true,
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`AI 流式调用失败 HTTP ${res.status}: ${errText.slice(0, 300)}`);
+    }
+
+    if (!res.body) {
+      throw new Error('AI 流式调用返回空 body');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // 按行解析 SSE
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') return;
+          try {
+            const json = JSON.parse(data);
+            const delta = json?.choices?.[0]?.delta?.content;
+            if (delta) yield delta;
+          } catch {
+            // 跳过无法解析的行
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  /**
+   * Mock 流式调用：分块 yield 占位内容
+   */
+  private async *mockChatStream(params: {
+    messages: Array<{ role: string; content: string }>;
+  }): AsyncGenerator<string> {
+    const mockContent = `[AI 网关 mock 流式响应] 已收到 ${params.messages.length} 条消息。`;
+    // 按 2-3 字符分块，模拟流式效果
+    const chunks = mockContent.match(/.{1,3}/g) ?? [mockContent];
+    for (const chunk of chunks) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      yield chunk;
+    }
   }
 
   /**
