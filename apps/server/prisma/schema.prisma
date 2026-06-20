@@ -503,3 +503,30 @@ model AiCallLog {
   @@index([model])
   @@index([createdAt])
 }
+
+// ============================================================
+// AI 网关配置（参考 11_后端平台数据层与AI基础设施实施清单.md）
+//
+// 设计原则：
+// - 不硬编码：URL / API Key / 模型名由网页端设置，存入数据库
+// - 隐式存储：API Key 加密后存入 SQLite，不落明文配置文件
+// - 不主动泄露：读取时只返回掩码，仅在实际调用时解密
+// ============================================================
+
+model AiProviderConfig {
+  id         String   @id @default(uuid())
+  // 服务商类型：openai / anthropic / custom
+  provider   String
+  // 接口地址（如 https://api.openai.com/v1）
+  baseUrl    String
+  // API Key 密文（AES-256-GCM 加密，格式 iv:authTag:ciphertext）
+  apiKeyEnc  String
+  // API Key 末尾 4 位明文（用于前端展示掩码，如 abcd）
+  apiKeyHint String
+  // 模型名称（如 gpt-4o-mini）
+  modelName  String
+  // 是否为当前活跃配置（全局唯一）
+  isActive   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

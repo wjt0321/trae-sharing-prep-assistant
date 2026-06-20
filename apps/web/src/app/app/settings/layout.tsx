@@ -13,6 +13,7 @@ const navItems = [
   { href: "/app/settings/security", label: "密码与安全", icon: "🔒" },
   { href: "/app/settings/workspace", label: "工作区成员", icon: "👥" },
   { href: "/app/settings/notifications", label: "通知偏好", icon: "🔔" },
+  { href: "/app/settings/ai-config", label: "AI 网关", icon: "🤖" },
 ];
 
 export default function SettingsLayout({

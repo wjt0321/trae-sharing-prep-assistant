@@ -131,6 +131,11 @@ export const api = {
       method: "POST",
       body: body ? JSON.stringify(body) : undefined,
     }),
+  put: <T = unknown>(path: string, body?: unknown) =>
+    apiFetch<T>(path, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
   patch: <T = unknown>(path: string, body?: unknown) =>
     apiFetch<T>(path, {
       method: "PATCH",

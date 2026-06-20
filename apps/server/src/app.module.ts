@@ -24,6 +24,7 @@ import { CollaborationModule } from './modules/collaboration/collaboration.modul
 import { ExportModule } from './modules/export/export.module';
 import { IntegrationModule } from './modules/integration/integration.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { AiConfigModule } from './modules/ai-config/ai-config.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     ExportModule,
     IntegrationModule,
     NotificationModule,
+    AiConfigModule,
   ],
   controllers: [HealthController],
   providers: [
