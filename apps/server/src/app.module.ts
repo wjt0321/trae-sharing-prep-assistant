@@ -23,6 +23,7 @@ import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { CollaborationModule } from './modules/collaboration/collaboration.module';
 import { ExportModule } from './modules/export/export.module';
 import { IntegrationModule } from './modules/integration/integration.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { IntegrationModule } from './modules/integration/integration.module';
     CollaborationModule,
     ExportModule,
     IntegrationModule,
+    NotificationModule,
   ],
   controllers: [HealthController],
   providers: [

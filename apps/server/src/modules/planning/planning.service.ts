@@ -3,6 +3,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AiGatewayService } from '../../infrastructure/ai-gateway/ai-gateway.service';
 import { PlanEngine } from './plan-engine';
 import { CollaborationService } from '../collaboration/collaboration.service';
+import { NotificationService } from '../notification/notification.service';
 import {
   ApiError,
   ErrorCode,
@@ -23,6 +24,7 @@ export class PlanningService {
     private readonly aiGateway: AiGatewayService,
     private readonly planEngine: PlanEngine,
     private readonly collaborationService: CollaborationService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ============================================================
@@ -230,6 +232,16 @@ export class PlanningService {
       targetId: plan.id,
       targetTitle: `规划 v${newVersion}`,
       detail: dto.reason,
+    });
+
+    // 通知工作区其他成员
+    await this.notificationService.notifyPlanReplanned({
+      actorId: userId,
+      workspaceId: goal.workspaceId,
+      goalId: goal.id,
+      goalTitle: goal.title ?? goal.topic,
+      reason: dto.reason,
+      planId: plan.id,
     });
 
     this.logger.log(`重规划完成: goalId=${goal.id}, version=${currentPlan.version} → ${newVersion}`);

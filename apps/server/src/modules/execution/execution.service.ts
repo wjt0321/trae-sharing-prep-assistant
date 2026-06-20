@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { CollaborationService } from '../collaboration/collaboration.service';
+import { NotificationService } from '../notification/notification.service';
 import {
   ApiError,
   ErrorCode,
@@ -33,6 +34,7 @@ export class ExecutionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly collaborationService: CollaborationService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ============================================================
@@ -249,6 +251,30 @@ export class ExecutionService {
       targetTitle: task.title,
       detail: `${fromStatus} → ${toStatus}`,
     });
+
+    // 通知任务指派人（排除操作者自己）
+    if (task.assigneeId && task.assigneeId !== userId) {
+      const operator = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true },
+      });
+      const goal = await this.prisma.goal.findUnique({
+        where: { id: task.goalId },
+        select: { workspaceId: true },
+      });
+      if (goal) {
+        await this.notificationService.notifyTaskStatusChanged({
+          assigneeId: task.assigneeId,
+          workspaceId: goal.workspaceId,
+          taskTitle: task.title,
+          taskId: id,
+          fromStatus,
+          toStatus,
+          operatorName: operator?.displayName ?? '未知用户',
+          goalId: task.goalId,
+        });
+      }
+    }
 
     this.logger.log(`任务状态变更: ${id} ${fromStatus} → ${toStatus} (by ${userId})`);
     return this.toTaskResponse(updated);

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import {
   ApiError,
   ErrorCode,
@@ -22,7 +23,10 @@ import type { AssignTaskDto } from './dto/collaboration.dto';
 export class CollaborationService {
   private readonly logger = new Logger(CollaborationService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   // ============================================================
   // 评论 CRUD
@@ -123,6 +127,44 @@ export class CollaborationService {
       targetTitle: dto.content.slice(0, 50),
       detail: dto.anchorType ? `针对 ${dto.anchorType} 评论` : null,
     });
+
+    // 发送通知
+    const commenter = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
+    });
+    const commenterName = commenter?.displayName ?? '未知用户';
+    const commentPreview = dto.content.slice(0, 80);
+
+    // 回复通知：通知父评论作者
+    if (dto.parentId) {
+      const parent = await this.prisma.comment.findUnique({ where: { id: dto.parentId } });
+      if (parent && parent.userId !== userId) {
+        await this.notificationService.notifyCommentReply({
+          parentAuthorId: parent.userId,
+          workspaceId: goal.workspaceId,
+          replierName: commenterName,
+          replyPreview: commentPreview,
+          commentId: comment.id,
+          goalId: goal.id,
+        });
+      }
+    }
+
+    // @提及通知：通知被提及用户（排除自己）
+    if (dto.mentions && dto.mentions.length > 0) {
+      const mentionedIds = dto.mentions.filter((id) => id !== userId);
+      if (mentionedIds.length > 0) {
+        await this.notificationService.notifyCommentMention({
+          mentionedUserIds: mentionedIds,
+          workspaceId: goal.workspaceId,
+          commenterName,
+          commentPreview,
+          commentId: comment.id,
+          goalId: goal.id,
+        });
+      }
+    }
 
     const userMap = await this.getUserMap([userId]);
     return this.toCommentResponse(comment, userMap);
@@ -266,6 +308,22 @@ export class CollaborationService {
       targetTitle: task.title,
       detail: `指派给 ${assignee?.displayName ?? '未知'}`,
     });
+
+    // 通知被指派人（排除自己指派给自己）
+    if (dto.assigneeId !== userId) {
+      const assigner = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true },
+      });
+      await this.notificationService.notifyTaskAssigned({
+        assigneeId: dto.assigneeId,
+        workspaceId: goal.workspaceId,
+        taskTitle: task.title,
+        taskId,
+        assignedByName: assigner?.displayName ?? '未知用户',
+        goalId: goal.id,
+      });
+    }
 
     const userMap = await this.getUserMap([userId, dto.assigneeId]);
     return this.toAssignmentResponse(assignment, task.title, userMap);

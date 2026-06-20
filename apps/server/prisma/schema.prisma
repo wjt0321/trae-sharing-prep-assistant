@@ -423,6 +423,30 @@ model ExportRecord {
 }
 
 // ============================================================
+// 通知（参考 09_通知集成与自动化实施清单.md）
+// ============================================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  // 接收者
+  userId      String
+  workspaceId String
+  // 通知类型（参考 NotificationTypeEnum）
+  type        String
+  title       String
+  content     String
+  // 目标对象类型：goal / task / plan / comment / workspace
+  targetType  String?
+  targetId    String?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([workspaceId])
+  @@index([type])
+}
+
+// ============================================================
 // 异步任务调度（参考 11_后端平台数据层与AI基础设施实施清单.md）
 // ============================================================
 

@@ -60,6 +60,9 @@ export const ErrorCode = {
   // 协作
   COLLABORATION_COMMENT_NOT_FOUND: { code: 'COLLABORATION_COMMENT_NOT_FOUND', status: 404, message: '评论不存在' },
 
+  // 通知
+  NOTIFICATION_NOT_FOUND: { code: 'NOTIFICATION_NOT_FOUND', status: 404, message: '通知不存在' },
+
   // 导出
   EXPORT_FAILED: { code: 'EXPORT_FAILED', status: 500, message: '导出失败' },
   EXPORT_FORMAT_UNSUPPORTED: { code: 'EXPORT_FORMAT_UNSUPPORTED', status: 422, message: '不支持的导出格式' },

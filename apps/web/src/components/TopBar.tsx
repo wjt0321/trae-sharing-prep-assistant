@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useWorkspace } from "@/lib/workspace";
 import { Button } from "@/components/ui/Button";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export function TopBar() {
   const { user, logout } = useAuth();
@@ -161,6 +162,8 @@ export function TopBar() {
             工作区
           </Link>
         </nav>
+
+        <NotificationBell />
 
         <div ref={userRef} className="relative">
           <button
