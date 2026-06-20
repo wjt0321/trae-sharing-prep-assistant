@@ -23,7 +23,7 @@ export class TaskWorkerService implements OnModuleInit, OnModuleDestroy {
     configService: ConfigService,
   ) {
     this.intervalMs = configService.get<number>('TASK_WORKER_INTERVAL_MS', 5000);
-    this.batchSize = configService.get<number>('TASK_WORKER_BATCH_SIZE', 5);
+    this.batchSize = Number(configService.get('TASK_WORKER_BATCH_SIZE', '5')) || 5;
   }
 
   onModuleInit(): void {

@@ -1,7 +1,22 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { SystemStatusCard } from "@/components/SystemStatusCard";
+import { useAuth } from "@/lib/auth";
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/app");
+    }
+  }, [user, loading, router]);
+
   return (
     <main className="flex flex-1 flex-col items-center justify-center bg-canvas px-6 py-16">
       <div className="flex w-full max-w-3xl flex-col items-center gap-10">
@@ -16,9 +31,18 @@ export default function Home() {
 
         <SystemStatusCard />
 
-        <Button variant="primary" size="lg" className="animate-rise">
-          开始使用
-        </Button>
+        <div className="flex gap-3 animate-rise">
+          <Link href="/login">
+            <Button variant="primary" size="lg">
+              登录
+            </Button>
+          </Link>
+          <Link href="/register">
+            <Button variant="secondary" size="lg">
+              注册
+            </Button>
+          </Link>
+        </div>
       </div>
     </main>
   );
