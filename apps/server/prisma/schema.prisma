@@ -36,6 +36,7 @@ model User {
   goals        Goal[]
   comments     Comment[]
   createdTasks ExecutionTask[] @relation("TaskCreator")
+  createdExports ExportRecord[] @relation("ExportCreator")
   taskJobs     TaskJob[]
 
   @@index([email])
@@ -329,20 +330,34 @@ model ExportRecord {
   id           String   @id @default(uuid())
   goalId       String
   goal         Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  // markdown | pdf | html | json
+  // 导出类型：action_list | phase_plan | report_summary | review_summary | presentation_outline
+  type         String
+  // 导出格式：markdown | printable
   format       String
-  // 文件路径（本地 uploads/ 下）
+  // 导出标题
+  title        String
+  // Markdown 内容（直接存储，便于共享页展示）
+  content      String
+  // 文件路径（本地 uploads/ 下，可选）
   filePath     String?
   // 分享 token（可空，表示不分享）
   shareToken   String?  @unique
-  // 状态
-  status       String   @default("pending")
+  // 分享过期时间（可空，表示永不过期）
+  shareExpiresAt DateTime?
+  // 是否允许下载
+  allowDownload Boolean @default(true)
+  // 状态：pending | succeeded | failed
+  status       String   @default("succeeded")
   errorMessage String?
+  // 创建者
+  creatorId    String
+  creator      User     @relation("ExportCreator", fields: [creatorId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([goalId])
   @@index([shareToken])
+  @@index([creatorId])
 }
 
 // ============================================================

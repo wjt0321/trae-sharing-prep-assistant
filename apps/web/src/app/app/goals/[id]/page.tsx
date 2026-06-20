@@ -136,8 +136,13 @@ export default function GoalDetailPage() {
               </Button>
             </Link>
             <Link href={`/app/goals/${goal.id}/execution`}>
+              <Button variant="secondary" size="sm">
+                工作台
+              </Button>
+            </Link>
+            <Link href={`/app/goals/${goal.id}/exports`}>
               <Button size="sm">
-                进入工作台
+                导出分享
               </Button>
             </Link>
           </div>

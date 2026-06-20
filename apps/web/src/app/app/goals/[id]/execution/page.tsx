@@ -200,6 +200,11 @@ export default function ExecutionPage() {
                 查看规划
               </Button>
             </Link>
+            <Link href={`/app/goals/${goalId}/exports`}>
+              <Button size="sm">
+                导出分享
+              </Button>
+            </Link>
           </div>
         </div>
 
