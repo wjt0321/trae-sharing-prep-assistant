@@ -16,6 +16,7 @@
  *   - 10xxx 集成
  *   - 11xxx AI 网关
  *   - 12xxx 任务调度
+ *   - 13xxx 审计与监控
  */
 export const ErrorCode = {
   // 通用
@@ -80,6 +81,11 @@ export const ErrorCode = {
   TASK_JOB_NOT_FOUND: { code: 'TASK_JOB_NOT_FOUND', status: 404, message: '任务不存在' },
   TASK_JOB_ALREADY_TERMINAL: { code: 'TASK_JOB_ALREADY_TERMINAL', status: 409, message: '任务已处于终态' },
   TASK_JOB_RETRY_EXHAUSTED: { code: 'TASK_JOB_RETRY_EXHAUSTED', status: 500, message: '任务重试次数耗尽' },
+
+  // 审计与监控
+  AUDIT_LOG_NOT_FOUND: { code: 'AUDIT_LOG_NOT_FOUND', status: 404, message: '审计日志不存在' },
+  MONITORING_QUERY_FAILED: { code: 'MONITORING_QUERY_FAILED', status: 500, message: '监控指标查询失败' },
+  RATE_LIMIT_EXCEEDED: { code: 'RATE_LIMIT_EXCEEDED', status: 429, message: '请求频率超限，请稍后再试' },
 } as const;
 
 export type ErrorCodeKey = keyof typeof ErrorCode;

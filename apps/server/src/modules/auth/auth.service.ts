@@ -5,6 +5,12 @@ import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { ApiError, ErrorCode } from '@ai-task-manager/shared';
+import { AuditService } from '../audit/audit.service';
+import {
+  AuditActionEnum,
+  AuditResourceTypeEnum,
+  AuditResultEnum,
+} from '@ai-task-manager/shared';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { RefreshDto } from './dto/refresh.dto';
@@ -29,14 +35,23 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, meta?: AuditMeta) {
     // 检查邮箱是否已注册
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
     if (existing) {
+      await this.auditService.record({
+        actorEmail: dto.email,
+        action: AuditActionEnum.REGISTER,
+        resourceType: AuditResourceTypeEnum.USER,
+        result: AuditResultEnum.FAILURE,
+        errorMessage: '邮箱已被注册',
+        ...meta,
+      });
       throw new ApiError(ErrorCode.AUTH_EMAIL_ALREADY_USED);
     }
 
@@ -78,6 +93,16 @@ export class AuthService {
 
     this.logger.log(`用户注册成功: ${result.user.email}`);
 
+    await this.auditService.record({
+      actorId: result.user.id,
+      actorEmail: result.user.email,
+      action: AuditActionEnum.REGISTER,
+      resourceType: AuditResourceTypeEnum.USER,
+      resourceId: result.user.id,
+      detail: { displayName: dto.displayName },
+      ...meta,
+    });
+
     const tokens = await this.issueTokens(result.user.id, result.user.email);
 
     return {
@@ -86,20 +111,45 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, meta?: AuditMeta) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
     if (!user) {
+      await this.auditService.record({
+        actorEmail: dto.email,
+        action: AuditActionEnum.LOGIN,
+        resourceType: AuditResourceTypeEnum.SESSION,
+        result: AuditResultEnum.FAILURE,
+        errorMessage: '用户不存在',
+        ...meta,
+      });
       throw new ApiError(ErrorCode.AUTH_INVALID_CREDENTIALS);
     }
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
+      await this.auditService.record({
+        actorId: user.id,
+        actorEmail: user.email,
+        action: AuditActionEnum.LOGIN,
+        resourceType: AuditResourceTypeEnum.SESSION,
+        result: AuditResultEnum.FAILURE,
+        errorMessage: '密码错误',
+        ...meta,
+      });
       throw new ApiError(ErrorCode.AUTH_INVALID_CREDENTIALS);
     }
 
     this.logger.log(`用户登录成功: ${user.email}`);
+
+    await this.auditService.record({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: AuditActionEnum.LOGIN,
+      resourceType: AuditResourceTypeEnum.SESSION,
+      ...meta,
+    });
 
     const tokens = await this.issueTokens(user.id, user.email);
 
@@ -155,7 +205,8 @@ export class AuthService {
     return this.toUserResponse(user, user.defaultWorkspaceId ?? '');
   }
 
-  async logout(userId: string) {
+  async logout(userId: string, meta?: AuditMeta) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     // 吊销该用户所有活跃 session
     await this.prisma.session.updateMany({
       where: {
@@ -164,10 +215,19 @@ export class AuthService {
       },
       data: { revokedAt: new Date() },
     });
+
+    await this.auditService.record({
+      actorId: userId,
+      actorEmail: user?.email,
+      action: AuditActionEnum.LOGOUT,
+      resourceType: AuditResourceTypeEnum.SESSION,
+      ...meta,
+    });
+
     return { success: true };
   }
 
-  async updateProfile(userId: string, dto: UpdateProfileDto) {
+  async updateProfile(userId: string, dto: UpdateProfileDto, meta?: AuditMeta) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new ApiError(ErrorCode.UNAUTHORIZED);
@@ -183,10 +243,23 @@ export class AuthService {
     });
 
     this.logger.log(`用户资料已更新: ${updated.email}`);
+
+    await this.auditService.record({
+      actorId: userId,
+      actorEmail: updated.email,
+      action: AuditActionEnum.UPDATE,
+      resourceType: AuditResourceTypeEnum.USER,
+      resourceId: userId,
+      detail: {
+        fieldsChanged: Object.keys(data),
+      },
+      ...meta,
+    });
+
     return this.toUserResponse(updated, updated.defaultWorkspaceId ?? '');
   }
 
-  async changePassword(userId: string, dto: ChangePasswordDto) {
+  async changePassword(userId: string, dto: ChangePasswordDto, meta?: AuditMeta) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new ApiError(ErrorCode.UNAUTHORIZED);
@@ -194,6 +267,16 @@ export class AuthService {
 
     const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
     if (!valid) {
+      await this.auditService.record({
+        actorId: userId,
+        actorEmail: user.email,
+        action: AuditActionEnum.PASSWORD_CHANGE,
+        resourceType: AuditResourceTypeEnum.USER,
+        resourceId: userId,
+        result: AuditResultEnum.FAILURE,
+        errorMessage: '当前密码不正确',
+        ...meta,
+      });
       throw new ApiError(ErrorCode.AUTH_INVALID_CREDENTIALS, {
         message: '当前密码不正确',
       });
@@ -219,6 +302,17 @@ export class AuthService {
     });
 
     this.logger.log(`用户密码已修改: ${user.email}`);
+
+    await this.auditService.record({
+      actorId: userId,
+      actorEmail: user.email,
+      action: AuditActionEnum.PASSWORD_CHANGE,
+      resourceType: AuditResourceTypeEnum.USER,
+      resourceId: userId,
+      detail: { sessionsRevoked: true },
+      ...meta,
+    });
+
     return { success: true };
   }
 
@@ -290,4 +384,14 @@ export class AuthService {
       defaultWorkspaceId,
     };
   }
+}
+
+/**
+ * 审计元信息（由 Controller 从请求中提取并传入）
+ */
+export interface AuditMeta {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  method?: string | null;
+  path?: string | null;
 }

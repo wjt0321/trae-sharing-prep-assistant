@@ -1,5 +1,6 @@
-import { Controller, Post, Get, Patch, Body, UseGuards } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { Controller, Post, Get, Patch, Body, UseGuards, Req } from '@nestjs/common';
+import type { Request } from 'express';
+import { AuthService, AuditMeta } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
@@ -14,16 +15,28 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  /**
+   * 从请求中提取审计元信息（IP / UA / method / path）
+   */
+  private extractAuditMeta(req: Request): AuditMeta {
+    return {
+      ipAddress: req.ip ?? req.socket?.remoteAddress ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+      method: req.method,
+      path: req.originalUrl ?? req.url,
+    };
+  }
+
   @Public()
   @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  register(@Body() dto: RegisterDto, @Req() req: Request) {
+    return this.authService.register(dto, this.extractAuditMeta(req));
   }
 
   @Public()
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  login(@Body() dto: LoginDto, @Req() req: Request) {
+    return this.authService.login(dto, this.extractAuditMeta(req));
   }
 
   @Public()
@@ -43,8 +56,13 @@ export class AuthController {
   updateProfile(
     @Body() dto: UpdateProfileDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.authService.updateProfile(user.userId, dto);
+    return this.authService.updateProfile(
+      user.userId,
+      dto,
+      this.extractAuditMeta(req),
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -52,13 +70,21 @@ export class AuthController {
   changePassword(
     @Body() dto: ChangePasswordDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.authService.changePassword(user.userId, dto);
+    return this.authService.changePassword(
+      user.userId,
+      dto,
+      this.extractAuditMeta(req),
+    );
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  logout(@CurrentUser() user: AuthenticatedUser) {
-    return this.authService.logout(user.userId);
+  logout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.authService.logout(user.userId, this.extractAuditMeta(req));
   }
 }

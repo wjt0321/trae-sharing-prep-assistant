@@ -3,9 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AiGatewayService } from '../../infrastructure/ai-gateway/ai-gateway.service';
 import { encrypt, maskApiKey, extractKeyHint } from '../../infrastructure/ai-gateway/crypto.util';
+import { AuditService } from '../audit/audit.service';
 import {
   ApiError,
   ErrorCode,
+  AuditActionEnum,
+  AuditResourceTypeEnum,
   type AiProviderConfigDto,
   type UpdateAiProviderConfigDto,
   type TestAiConfigDto,
@@ -24,6 +27,7 @@ import {
  * - API Key 加密存储（AES-256-GCM），读取时掩码
  * - 配置由网页端设置，不硬编码在代码或环境变量中
  * - 测试连通性（不落库）
+ * - 配置变更记录审计日志（不记录 API Key 明文）
  */
 @Injectable()
 export class AiConfigService {
@@ -34,6 +38,7 @@ export class AiConfigService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly aiGateway: AiGatewayService,
+    private readonly auditService: AuditService,
   ) {
     // 加密密钥优先取专用变量，回退到 JWT_SECRET
     this.encryptionSecret =
@@ -76,7 +81,17 @@ export class AiConfigService {
   /**
    * 更新配置（加密 API Key 后落库，设为活跃）
    */
-  async updateConfig(dto: UpdateAiProviderConfigDto): Promise<AiProviderConfigDto> {
+  async updateConfig(
+    dto: UpdateAiProviderConfigDto,
+    auditMeta?: {
+      actorId?: string;
+      actorEmail?: string;
+      ipAddress?: string | null;
+      userAgent?: string | null;
+      method?: string | null;
+      path?: string | null;
+    },
+  ): Promise<AiProviderConfigDto> {
     // 校验
     if (!dto.provider || !dto.baseUrl || !dto.apiKey || !dto.modelName) {
       throw new ApiError(ErrorCode.BAD_REQUEST, { message: '服务商、地址、API Key、模型名均不能为空' });
@@ -125,6 +140,20 @@ export class AiConfigService {
     this.logger.log(`AI 网关配置已更新: provider=${config.provider}, model=${config.modelName}`);
     this.aiGateway.invalidateCache();
 
+    // 记录审计日志（不记录 API Key 明文）
+    await this.auditService.record({
+      action: AuditActionEnum.CONFIG_CHANGE,
+      resourceType: AuditResourceTypeEnum.AI_CONFIG,
+      resourceId: config.id,
+      detail: {
+        provider: config.provider,
+        baseUrl: config.baseUrl,
+        modelName: config.modelName,
+        apiKeyHint: config.apiKeyHint,
+      },
+      ...auditMeta,
+    });
+
     return {
       configured: true,
       provider: config.provider,
@@ -139,13 +168,30 @@ export class AiConfigService {
   /**
    * 清除配置（回退到 mock 模式）
    */
-  async clearConfig(): Promise<{ cleared: boolean }> {
+  async clearConfig(
+    auditMeta?: {
+      actorId?: string;
+      actorEmail?: string;
+      ipAddress?: string | null;
+      userAgent?: string | null;
+      method?: string | null;
+      path?: string | null;
+    },
+  ): Promise<{ cleared: boolean }> {
     await this.prisma.aiProviderConfig.updateMany({
       where: { isActive: true },
       data: { isActive: false },
     });
     this.logger.log('AI 网关配置已清除，回退到 mock 模式');
     this.aiGateway.invalidateCache();
+
+    await this.auditService.record({
+      action: AuditActionEnum.CONFIG_CHANGE,
+      resourceType: AuditResourceTypeEnum.AI_CONFIG,
+      detail: { action: 'clear', revertedToMock: true },
+      ...auditMeta,
+    });
+
     return { cleared: true };
   }
 

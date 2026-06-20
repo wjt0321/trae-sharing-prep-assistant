@@ -2,18 +2,19 @@
 
 ## 目标
 
-本仓库用于维护 `分享会筹备助手` 比赛 Demo。  
+本仓库用于维护 `AI 任务管家`（从 `分享会筹备助手` 比赛版升级而来）。
 任何 Agent 在执行任务时，都应优先服务于以下目标：
 
-- 保持单场景聚焦
-- 保持 Demo 可运行
+- 保持 Monorepo 工程骨架可运行（前端 + 后端 + 共享契约层）
+- 保持 legacy-demo 可独立运行
 - 保持页面适合截图、录屏与比赛发帖
 - 保持文档归档清晰
+- 保持安全监控与发布治理就位
 
 ## 执行优先级
 
-1. 不破坏当前可运行 Demo
-2. 不偏离“分享会筹备助手”的单场景范围
+1. 不破坏当前可运行的 Monorepo 工程
+2. 不偏离"AI 任务管家"的产品范围（灵感到执行全链路）
 3. 不把页面改成聊天机器人或后台系统
 4. 不把新文档放错目录
 5. 修改后完成测试、构建与必要提交
@@ -23,22 +24,67 @@
 ### 可以做
 
 - 优化前端页面结构、文案、样式和交互细节
-- 完善本地规划逻辑与测试
-- 新增比赛所需项目文档
+- 完善后端模块、API 与数据模型
+- 完善共享契约层 DTO / 枚举 / 错误码
+- 新增项目文档
 - 调整截图、录屏、发帖相关材料
 - 提交清晰的小步 Git 版本
 
 ### 不要做
 
-- 不要擅自引入后端服务
-- 不要擅自接入真实大模型 API
-- 不要擅自添加登录、数据库、多人协作
-- 不要把 Demo 扩展成多场景平台
+- 不要擅自引入 Docker / Redis 等外部依赖（保持 Windows 本地可运行）
+- 不要擅自接入未加密的 API Key（必须通过 Web 界面配置 + AES-256-GCM 加密存储）
 - 不要把文档散落到错误目录
+- 不要在 legacy-demo 中引入后端服务
 
 ## 架构理解（必读）
 
-本项目是一个**纯前端规则引擎**，没有后端、没有 AI 调用。
+本项目是一个 **Monorepo 工程骨架**（pnpm workspaces），包含：
+
+```
+competition_notes/
+├── apps/
+│   ├── web/                      # Next.js 16 前端（App Router + Tailwind 4）
+│   └── server/                   # NestJS 11 后端（Prisma + SQLite）
+├── packages/
+│   └── shared/                   # 前后端共享契约（CJS，DTO + 枚举 + 错误码）
+├── legacy-demo/                  # 原比赛版单页 Demo（React + Vite，独立运行）
+├── project-docs/                 # 项目文档
+├── docs/                         # legacy-demo 的 GitHub Pages 产物
+└── .github/workflows/            # CI/CD（lint + typecheck + build + test）
+```
+
+### 后端 14 个业务模块
+
+```
+auth / workspace / goal / planning / execution
+knowledge / collaboration / export / integration
+notification / ai-config / prompt-registry
+audit / monitoring
+```
+
+### 前端核心页面
+
+```
+/login /register                  # 认证
+/app                              # 首页（目标列表）
+/app/goals/[id]                   # 目标详情
+/app/goals/[id]/plan              # 规划详情
+/app/goals/[id]/execution         # 执行工作台
+/app/goals/[id]/collaboration     # 协作页
+/app/goals/[id]/exports           # 导出页
+/app/templates                    # 模板库
+/app/assets                       # 知识资产库
+/app/workspaces                   # 工作区管理
+/app/notifications                # 通知中心
+/app/settings/*                   # 设置页（资料/密码/成员/通知/AI配置/提示词）
+/app/admin                        # 监控页（系统概览/业务指标/审计日志）
+/share/[token]                    # 公开共享页
+```
+
+### legacy-demo（原比赛版）
+
+原比赛版单页 Demo 保留在 `legacy-demo/`，是一个 **纯前端规则引擎**，没有后端、没有 AI 调用。
 
 ```
 用户输入（6 项结构化字段：topic / audience / duration / date / goal / preparedness）
@@ -47,132 +93,144 @@
   HeroSection ──→ App.handleSubmit()
         │               │
         │         setStatus("loading")  → 骨架屏
-        │         setTimeout(900ms)       （测试用 vi.advanceTimersByTime(900) 匹配）
+        │         setTimeout(900ms)
         │               │
         │         createPlan(input)     ← src/lib/planner.js
         │               │
-        │    ┌──────────┼──────────┐
-        │    ▼          ▼          ▼
-        │  从 demoTemplates.js 查表：
-        │  · audienceProfiles   (5 种听众画像)
-        │  · durationProfiles   (5 种时长画像)
-        │  · goalProfiles       (4 种目标画像)
-        │  · preparednessProfiles (5 种准备状态)
-        │  · structureSuggestions (5 种结构建议)
-        │  · basePlanTemplate   (4 阶段模板 + 清单 + insights)
-        │               │
-        │    规则叠加顺序：听众 → 时长 → 目标 → 准备状态 → 日期
+        │    规则叠加：听众 → 时长 → 目标 → 准备状态 → 日期
         │               │
         ▼               ▼
   setResult() ← setStatus("done")
         │
         ▼
   输出组件树：
-  ├── StageSection             — 4 阶段卡片（done/current/pending 状态）
-  ├── StructureSuggestionPanel — 按时长推荐结构 + 时间分配
-  ├── ChecklistPanel           — 行动清单，前 2 项标"先做"
-  └── InsightPanel             — 准备重点(highlights) + 容易遗漏(risks)
+  ├── StageSection             — 4 阶段卡片
+  ├── StructureSuggestionPanel — 结构建议 + 时间分配
+  ├── ChecklistPanel           — 行动清单
+  └── InsightPanel             — 准备重点 + 容易遗漏
 ```
-
-**关键行为**：`createPlan()` 是纯函数，所有逻辑是查表 + 字符串拼接，完全确定性。任何输入组合都不会报错——缺失字段会 fallback 到默认值（`defaultInput`）。
-
-**状态机**：`idle`（初始/预览）→ `loading`（骨架屏 900ms）→ `done`（完整输出）。修改任何输入字段立即回到 `idle` 并 `setResult(null)`。
 
 ## 代码与文件位置
 
+### Monorepo 核心
+
 | 文件 | 职责 |
 |------|------|
-| `src/App.jsx` | 页面主入口，3 状态切换，组装所有子组件 |
-| `src/App.test.jsx` | 组件交互回归测试（jsdom 环境，fake timers） |
-| `src/components/HeroSection.jsx` | 首屏输入区：textarea + 4 个 select + date + 按钮 |
-| `src/components/StageSection.jsx` | 4 阶段卡片网格，含状态标记与完成标准 |
-| `src/components/StructureSuggestionPanel.jsx` | 结构建议 + 时间分配 |
-| `src/components/ChecklistPanel.jsx` | 编号清单，前 2 项高亮"先做" |
-| `src/components/InsightPanel.jsx` | 准备重点（绿）+ 容易遗漏（黄）双列表 |
-| `src/components/LoadingState.jsx` | 4 个骨架卡片 + "正在拆解..." |
-| `src/components/AppHeader.jsx` | 顶部标题栏 + 比赛标记 |
-| `src/components/FooterNote.jsx` | 底部产品说明 |
-| `src/data/demoTemplates.js` | 所有知识库/画像表/模板数据（~275 行，是数据核心） |
-| `src/lib/planner.js` | 规则引擎，`createPlan()` + `createPlanFromGoal()` |
-| `src/lib/planner.test.js` | 规划逻辑单元测试（纯逻辑，无需 jsdom） |
-| `src/styles/globals.css` | Tailwind 指令 + 全局样式 + 动画定义 |
-| `.trae/` | ⚠️ TRAE IDE 技能文件，非项目源码，vitest 已排除，**不要在此目录做任何修改** |
-| `project-docs/赛前准备` | 历史方案、比赛资料、草稿归档 |
-| `project-docs/项目文档` | 正式项目文档 |
-| `project-docs/初赛文档` | MVP 改造规划与任务单 |
-| `docs/` | GitHub Pages 构建产物（`npm run build` 输出） |
+| `CLAUDE.md` | 项目约定、技术栈、命令、目录 |
+| `pnpm-workspace.yaml` | workspace 配置 |
+| `package.json` | 根 workspace 脚本 |
+| `.github/workflows/ci.yml` | CI/CD（lint + typecheck + build + test） |
+
+### 后端核心
+
+| 文件 | 职责 |
+|------|------|
+| `apps/server/src/main.ts` | 入口（全局前缀 /api + CORS + ValidationPipe + 过滤器 + 拦截器） |
+| `apps/server/src/app.module.ts` | 根模块（14 个业务模块 + 中间件注册） |
+| `apps/server/src/infrastructure/` | Prisma / TaskWorker / AiGateway / Storage |
+| `apps/server/src/modules/` | 14 个业务模块 |
+| `apps/server/src/presentation/` | Health / 异常过滤器 / 响应拦截器 / 速率限制 / 请求日志 |
+| `apps/server/prisma/schema.prisma` | 数据库模型 |
+| `apps/server/scripts/backup.mjs` | 数据备份脚本 |
+| `apps/server/scripts/security-scan.mjs` | 安全扫描脚本 |
+
+### 前端核心
+
+| 文件 | 职责 |
+|------|------|
+| `apps/web/src/app/globals.css` | 设计系统 token（@theme inline） |
+| `apps/web/src/components/ui/` | 基础组件（Button / Card / Input / Select / Tag / Modal / Toast / Skeleton） |
+| `apps/web/src/components/layout/` | 页面骨架（PageContainer / PageHeader / Section） |
+| `apps/web/src/lib/api.ts` | API 客户端（fetch 封装 + token 处理） |
+| `apps/web/src/lib/auth.tsx` | 认证上下文 |
+| `apps/web/src/lib/workspace.tsx` | 工作区上下文 |
+
+### 共享契约
+
+| 文件 | 职责 |
+|------|------|
+| `packages/shared/src/dto/` | DTO 定义（auth/goal/planning/execution/knowledge/collaboration/export/workspace/audit/monitoring） |
+| `packages/shared/src/enums/` | 枚举定义 |
+| `packages/shared/src/errors/` | 错误码 + ApiError 类 |
+
+### legacy-demo
+
+| 文件 | 职责 |
+|------|------|
+| `legacy-demo/src/App.jsx` | 页面主入口，3 状态切换 |
+| `legacy-demo/src/components/` | UI 组件（HeroSection / StageSection / StructureSuggestionPanel / ChecklistPanel / InsightPanel） |
+| `legacy-demo/src/data/demoTemplates.js` | 知识库/画像表/模板数据 |
+| `legacy-demo/src/lib/planner.js` | 规则引擎，createPlan() |
+| `legacy-demo/src/lib/planner.test.js` | 规划逻辑单元测试 |
 
 ## 文档归类规则
 
 - 新生成文档默认放入 `project-docs/项目文档`
+- 实施清单与进度放入 `project-docs/实施清单`
 - 仅当文档属于历史归档、旧草稿、赛前参考材料时，才放入 `project-docs/赛前准备`
-- `docs/` 目录专用于 GitHub Pages 静态发布产物，构建后由 `npm run build` 生成
+- `docs/` 目录专用于 GitHub Pages 静态发布产物（legacy-demo 构建输出）
 
 ## 视觉设计系统
 
-所有颜色通过 `tailwind.config.js` 的自定义 token 使用，**禁止硬编码 hex 值**：
+所有颜色通过 Tailwind 4 `@theme inline` 语法定义（在 `apps/web/src/app/globals.css` 中），**禁止硬编码 hex 值**：
 
 | Token | Hex | 用途 |
 |-------|-----|------|
 | `canvas` | `#F8F6F1` | 页面底色 |
 | `surface` | `#FFFFFF` | 卡片/面板底色 |
-| `muted` | `#F1ECE4` | 次级底色（骨架屏、标签背景） |
+| `muted` | `#F1ECE4` | 次级底色 |
 | `ink` | `#2B2926` | 主文字 |
 | `secondary` | `#5F5A53` | 辅助文字 |
-| `tertiary` | `#8C857B` | 弱化文字（footer） |
+| `tertiary` | `#8C857B` | 弱化文字 |
 | `accent` | `#C96A3D` | 强调色（按钮、圆点、链接） |
 | `accent-hover` | `#B85B31` | 按钮悬停 |
-| `success` | `#6F907C` | 准备重点/已完成标记 |
-| `warning` | `#B69042` | 容易遗漏/风险标记 |
-
-可用动画类：`.animate-rise`（淡入上移 220ms）、`.skeleton`（加载闪烁）。圆角统一使用 `rounded-panel`（16px）或 `rounded-[14px]`/`rounded-[10px]`。
+| `success` | `#6F907C` | 成功标记 |
+| `warning` | `#B69042` | 警告标记 |
+| `danger` | `#B45A42` | 危险标记 |
 
 **视觉禁区**：紫粉蓝大渐变、玻璃拟态、满屏指标卡、聊天气泡布局、后台管理页风格。
 
-## 页面修改规则
-
-- 首屏必须清楚表达产品用途
-- 输入区必须保持为第一视觉重点
-- 结果区必须突出结构化输出
-- 行动清单区必须有明确”收口感”
-- 文案应偏比赛展示口径，而不是普通工具提示
-- **所有颜色必须使用 Tailwind token（如 `text-ink`、`bg-accent`），禁止写死 hex**
-
 ## 验证流程
 
-每次完成改动后，按顺序执行：
+### Monorepo 验证
 
 ```bash
-npm test              # 必须全部通过（planner 单元测试 + App 交互测试）
+# 共享包
+cd packages/shared && pnpm run build
+
+# 后端
+cd apps/server && pnpm run typecheck && pnpm run build
+
+# 前端
+cd apps/web && pnpm run typecheck && pnpm run build
+
+# 安全扫描
+cd apps/server && pnpm run security-scan
+
+# 端到端 API 测试
+cd apps/server && pnpm run start:dev
+# 另开终端：
+curl -s http://localhost:4000/health
+```
+
+### legacy-demo 验证
+
+```bash
+cd legacy-demo
+npm test              # 必须全部通过
 npm run build         # 必须构建成功，输出到 docs/
 ```
 
-运行单个测试文件：
-
-```bash
-npx vitest run src/lib/planner.test.js      # 规划逻辑
-npx vitest run src/App.test.jsx              # 组件交互
-npx vitest src/lib/planner.test.js           # 监视模式
-```
-
-**测试注意事项**：
-- `App.test.jsx` 依赖 `vi.useFakeTimers()` + `vi.advanceTimersByTime(900)` 跳过 handleSubmit 中的 setTimeout
-- `planner.test.js` 有一个负时区日期测试（MockDate），涉及 `vi.stubGlobal("Date", MockDate)`，改动日期逻辑时必须覆盖此场景
-- vite test 配置在 `vite.config.js` 的 `test` 字段中，测试文件匹配 `src/**/*.{test,spec}.{js,jsx}`
-
 ## Git 提交流程
 
-- 改动完成后先检查状态：
+- 改动完成后先检查状态：`git status --short`
+- 提交信息保持 Conventional Commits 风格：
 
 ```bash
-git status --short
-```
-
-- 提交信息保持简洁明确，建议使用：
-
-```bash
+git commit -m "feat(server): ..."
+git commit -m "feat(web): ..."
+git commit -m "feat(shared): ..."
 git commit -m "docs(project): ..."
-git commit -m "feat(demo): ..."
 git commit -m "fix(ui): ..."
 ```
 
@@ -183,7 +241,7 @@ git commit -m "fix(ui): ..."
 - 帮用户推进目标
 - 生成可执行路径
 - 输出结构化结果
-- 适合比赛展示的小产品
+- 从灵感到执行的全链路
 
 避免表达：
 

@@ -24,7 +24,9 @@
     "db:reset": "prisma migrate reset --force",
     "db:seed": "prisma db seed",
     "db:setup": "prisma generate && prisma migrate dev && prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "backup": "node scripts/backup.mjs",
+    "security-scan": "node scripts/security-scan.mjs"
   },
   "dependencies": {
     "@ai-task-manager/shared": "workspace:*",

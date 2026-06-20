@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 
@@ -12,6 +12,8 @@ import { StorageModule } from './infrastructure/storage/storage.module';
 import { HealthController } from './presentation/health.controller';
 import { GlobalExceptionFilter } from './presentation/global-exception.filter';
 import { ResponseInterceptor } from './presentation/response.interceptor';
+import { RequestLogMiddleware } from './presentation/request-log.middleware';
+import { RateLimitMiddleware } from './presentation/rate-limit.middleware';
 
 // 业务模块
 import { AuthModule } from './modules/auth/auth.module';
@@ -26,6 +28,8 @@ import { IntegrationModule } from './modules/integration/integration.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
 import { PromptRegistryModule } from './modules/prompt-registry/prompt-registry.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { MonitoringModule } from './modules/monitoring/monitoring.module';
 
 @Module({
   imports: [
@@ -52,6 +56,9 @@ import { PromptRegistryModule } from './modules/prompt-registry/prompt-registry.
     NotificationModule,
     AiConfigModule,
     PromptRegistryModule,
+    // 安全监控与发布治理（12）
+    AuditModule,
+    MonitoringModule,
   ],
   controllers: [HealthController],
   providers: [
@@ -65,4 +72,17 @@ import { PromptRegistryModule } from './modules/prompt-registry/prompt-registry.
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * 全局中间件注册
+   *
+   * 顺序：速率限制 → 请求日志 → 路由处理
+   * - RateLimitMiddleware 必须最先执行（拒绝超限请求）
+   * - RequestLogMiddleware 记录所有请求（含被拒绝的）
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer
+      .apply(RateLimitMiddleware, RequestLogMiddleware)
+      .forRoutes('*');
+  }
+}

@@ -161,6 +161,16 @@ export function TopBar() {
           >
             工作区
           </Link>
+          <Link
+            href="/app/admin"
+            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+              pathname?.startsWith("/app/admin")
+                ? "bg-muted text-ink font-medium"
+                : "text-secondary hover:bg-muted"
+            }`}
+          >
+            监控
+          </Link>
         </nav>
 
         <NotificationBell />

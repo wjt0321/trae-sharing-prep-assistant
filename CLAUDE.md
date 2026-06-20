@@ -10,8 +10,9 @@
 ## 当前产品范围
 
 - Monorepo 工程骨架（前端 + 后端 + 共享契约层）
-- 后端：NestJS 模块化单体，9 个业务模块骨架 + Prisma + SQLite
+- 后端：NestJS 模块化单体，14 个业务模块 + Prisma + SQLite
 - 前端：Next.js App Router + Warm Editorial 设计系统
+- 安全监控：审计日志 + 健康检查 + 系统指标 + 业务指标 + 速率限制 + CI/CD
 - 原 Demo 保留为 `legacy-demo/`，可独立运行
 
 ## 技术栈
@@ -33,8 +34,12 @@
 - `Prisma 6` + `SQLite`（Windows 本地可运行，无 Docker/Redis 依赖）
 - 应用内任务 Worker（setInterval 轮询 TaskJob 表，无 BullMQ）
 - 本地文件存储（`uploads/`）
-- AI 网关（mock 模式，无外部 API 依赖）
+- AI 网关（mock 模式 + OpenAI 兼容协议真实接入）
 - JWT + Passport + bcrypt 鉴权
+- 审计日志（AuditLog 模型，12 种动作）
+- 监控指标（健康检查 + 系统指标 + 业务指标）
+- 速率限制（IP 维度，内存级）
+- 请求日志中间件（method/path/status/duration）
 
 ### 共享契约层（`packages/shared`）
 
@@ -55,9 +60,10 @@ competition_notes/
 │   └── server/                   # NestJS 后端
 │       ├── src/
 │       │   ├── infrastructure/   # Prisma / TaskWorker / AiGateway / Storage
-│       │   ├── modules/          # 9 个业务模块
-│       │   └── presentation/     # Health / 异常过滤器 / 响应拦截器
+│       │   ├── modules/          # 14 个业务模块（含 audit / monitoring）
+│       │   └── presentation/     # Health / 异常过滤器 / 响应拦截器 / 速率限制 / 请求日志
 │       ├── prisma/               # schema + migrations + seed
+│       ├── scripts/              # backup.mjs / security-scan.mjs
 │       └── uploads/              # 本地文件存储
 ├── packages/
 │   └── shared/                   # 前后端共享契约（CJS）
@@ -135,22 +141,26 @@ competition_notes/
               ▼                  ▼                  ▼
      ┌────────────────┐ ┌──────────────┐ ┌────────────────┐
      │  Prisma + DB   │ │ TaskWorker   │ │  AiGateway     │
-     │  (SQLite)      │ │ (轮询 TaskJob)│ │  (mock 模式)   │
+     │  (SQLite)      │ │ (轮询 TaskJob)│ │  (mock+real)   │
      └────────────────┘ └──────────────┘ └────────────────┘
 
-     后端 9 个业务模块：
+     后端 14 个业务模块：
      auth / workspace / goal / planning / execution
      knowledge / collaboration / export / integration
+     notification / ai-config / prompt-registry
+     audit / monitoring
 
      共享契约层 packages/shared（CJS）：
      DTO + 枚举 + 错误码 + API 响应结构
 ```
 
-**后端核心设计**：全局前缀 `/api`（health 除外），全局 ValidationPipe（whitelist + transform），全局异常过滤器，统一响应拦截器（`{success, data, error, timestamp}`）。TaskWorker 用 setInterval 轮询 TaskJob 表，支持重试。AiGateway 在 mock 模式下记录调用日志到 AiCallLog 表。
+**后端核心设计**：全局前缀 `/api`（health 除外），全局 ValidationPipe（whitelist + transform），全局异常过滤器，统一响应拦截器（`{success, data, error, timestamp}`）。TaskWorker 用 setInterval 轮询 TaskJob 表，支持重试。AiGateway 在 mock 模式下记录调用日志到 AiCallLog 表。审计日志通过 AuditService.record() 异步写入 AuditLog 表。速率限制通过 RateLimitMiddleware 实现（IP 维度，内存级）。请求日志通过 RequestLogMiddleware 记录并写入 MonitoringService 内存统计。
 
-**前端核心设计**：Next.js App Router，`/api/server/*` 通过 rewrites 代理到后端。设计 token 用 Tailwind 4 `@theme` 语法定义，基础组件手写（Button/Card 等）。
+**前端核心设计**：Next.js App Router，`/api/server/*` 通过 rewrites 代理到后端。设计 token 用 Tailwind 4 `@theme` 语法定义，基础组件手写（Button/Card 等）。监控页 `/app/admin` 提供三 Tab（系统概览 / 业务指标 / 审计日志）。
 
 **legacy-demo**：原比赛版单页 Demo 保留在 `legacy-demo/`，独立运行（`cd legacy-demo && npm run dev`），构建产物发布到 `docs/` 供 GitHub Pages 访问。
+
+**CI/CD**：GitHub Actions（`.github/workflows/ci.yml`），push to master 或 PR 时触发 lint + typecheck + build + backend test。
 
 ## 常用命令
 
@@ -172,6 +182,8 @@ pnpm run db:migrate       # 创建新迁移
 pnpm run db:seed          # 写入种子数据
 pnpm run db:studio        # 打开 Prisma Studio
 pnpm run test             # Jest 单元测试
+pnpm run backup           # 数据备份（SQLite + uploads + schema 快照）
+pnpm run security-scan    # 安全扫描（密钥泄露 / .env 跟踪 / 默认密码）
 
 # === 前端（apps/web）===
 cd apps/web

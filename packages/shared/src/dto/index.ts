@@ -13,3 +13,5 @@ export * from './auth.dto.js';
 export * from './ai-config.dto.js';
 export * from './prompt-template.dto.js';
 export * from './ai-stats.dto.js';
+export * from './audit.dto.js';
+export * from './monitoring.dto.js';

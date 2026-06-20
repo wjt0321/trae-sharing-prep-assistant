@@ -7,14 +7,17 @@ import {
   Body,
   Query,
   Res,
+  Req,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { AiConfigService } from './ai-config.service';
 import { AiGatewayService } from '../../infrastructure/ai-gateway/ai-gateway.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { UpdateAiConfigInputDto, TestAiConfigInputDto, ChatStreamInputDto } from './dto/ai-config-input.dto';
 
 /**
@@ -22,6 +25,7 @@ import { UpdateAiConfigInputDto, TestAiConfigInputDto, ChatStreamInputDto } from
  *
  * 所有接口需登录访问，配置由网页端设置，不硬编码。
  * API Key 加密存储，读取时掩码，不主动泄露。
+ * 配置变更记录审计日志（不记录 API Key 明文）。
  */
 @Controller('ai-config')
 @UseGuards(JwtAuthGuard)
@@ -40,14 +44,35 @@ export class AiConfigController {
   /** 更新配置（加密 API Key 后落库） */
   @Put()
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
-  updateConfig(@Body() dto: UpdateAiConfigInputDto) {
-    return this.aiConfigService.updateConfig(dto);
+  updateConfig(
+    @Body() dto: UpdateAiConfigInputDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.aiConfigService.updateConfig(dto, {
+      actorId: user.userId,
+      actorEmail: user.email,
+      ipAddress: req.ip ?? req.socket?.remoteAddress ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+      method: req.method,
+      path: req.originalUrl ?? req.url,
+    });
   }
 
   /** 清除配置（回退到 mock 模式） */
   @Delete()
-  clearConfig() {
-    return this.aiConfigService.clearConfig();
+  clearConfig(
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.aiConfigService.clearConfig({
+      actorId: user.userId,
+      actorEmail: user.email,
+      ipAddress: req.ip ?? req.socket?.remoteAddress ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+      method: req.method,
+      path: req.originalUrl ?? req.url,
+    });
   }
 
   /** 测试连通性（不落库） */

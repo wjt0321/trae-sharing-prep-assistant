@@ -563,3 +563,47 @@ model PromptTemplate {
   @@index([name])
   @@index([isActive])
 }
+
+// ============================================================
+// 审计日志（参考 12_安全监控指标与发布治理实施清单.md §1）
+//
+// 设计：
+// - 记录关键操作（登录/配置变更/删除/导出/分享等）
+// - 操作者 + 动作 + 资源 + 结果 + 上下文
+// - 不记录请求体/响应体中的敏感字段（如密码、API Key）
+// ============================================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  // 操作者 ID（未登录操作如 login 失败时为 null）
+  actorId     String?
+  // 操作者邮箱（冗余，便于审计查询）
+  actorEmail  String?
+  // 动作类型：login | logout | register | create | update | delete | export | share | config_change | password_change | invite | role_change
+  action      String
+  // 资源类型：user / workspace / goal / plan / task / comment / export / template / asset / notification / ai_config / prompt / session
+  resourceType String?
+  // 资源 ID
+  resourceId  String?
+  // 结果：success | failure
+  result      String   @default("success")
+  // 失败原因（result=failure 时有值）
+  errorMessage String?
+  // 客户端 IP
+  ipAddress   String?
+  // User-Agent
+  userAgent   String?
+  // 请求方法
+  method      String?
+  // 请求路径
+  path        String?
+  // 上下文详情（JSON 字符串，非敏感字段）
+  detail      String?
+  createdAt   DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([result])
+  @@index([createdAt])
+}
