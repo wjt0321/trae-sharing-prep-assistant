@@ -131,15 +131,34 @@ model Goal {
   creatorId    String
   creator      User     @relation(fields: [creatorId], references: [id])
   // 结构化输入
+  // 原始目标文本（用户一句话输入，低门槛入口）
   topic        String
+  // 结构化标题（AI 生成或用户编辑）
+  title        String?
+  // 场景类型：sharing_prep | competition | content_creation | small_project | learning | unknown
+  scenarioType String?
   audience     String?
   duration     Int?
   shareDate    DateTime?
   // inform | persuade | teach | review
   goalType     String?
   preparedness String?
+  // 时间约束（自然语言，如"两周内"）
+  timeConstraint String?
+  // 资源约束（自然语言，如"独立完成"）
+  resourceConstraint String?
+  // 优先级：low | medium | high | urgent
+  priority     String?
+  // 成功标准（自然语言描述）
+  successCriteria String?
+  // 当前阶段：inspiration | context | planning | executing | done | archived
+  currentStage String   @default("inspiration")
+  // 是否多人协作
+  isCollaborative Boolean @default(false)
   // 场景标签（逗号分隔）
   sceneTags    String?
+  // 场景识别快照（JSON 字符串，存储 AI 识别的完整结果，用于审计）
+  scenarioSnapshot String?
   // 时间戳
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -152,6 +171,8 @@ model Goal {
 
   @@index([workspaceId])
   @@index([creatorId])
+  @@index([scenarioType])
+  @@index([currentStage])
 }
 
 model Plan {

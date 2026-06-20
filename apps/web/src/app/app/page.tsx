@@ -56,11 +56,18 @@ export default function AppHomePage() {
           <div className="rounded-xl border border-border bg-surface p-5 shadow-sm animate-rise">
             <h2 className="text-base font-semibold text-ink">快速开始</h2>
             <p className="mt-1 text-sm text-secondary">
-              后续将在此创建目标、生成规划、推进任务
+              从一句话开始，把想法变成可推进的目标
             </p>
-            <div className="mt-4 flex flex-col gap-2 text-sm">
-              <span className="text-tertiary">目标创建器 · 规划引擎 · 执行工作台</span>
-              <span className="text-xs text-tertiary">即将推出</span>
+            <Link href="/app/goals/new">
+              <Button size="sm" className="mt-4">
+                创建目标
+              </Button>
+            </Link>
+            <div className="mt-3 flex flex-col gap-1.5 text-xs text-tertiary">
+              <Link href="/app/goals" className="hover:text-accent">
+                查看全部目标 →
+              </Link>
+              <span>规划引擎 · 执行工作台（即将推出）</span>
             </div>
           </div>
         </div>

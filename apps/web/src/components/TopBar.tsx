@@ -121,6 +121,16 @@ export function TopBar() {
             首页
           </Link>
           <Link
+            href="/app/goals"
+            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+              pathname?.startsWith("/app/goals")
+                ? "bg-muted text-ink font-medium"
+                : "text-secondary hover:bg-muted"
+            }`}
+          >
+            目标
+          </Link>
+          <Link
             href="/app/workspaces"
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
               pathname?.startsWith("/app/workspaces")
