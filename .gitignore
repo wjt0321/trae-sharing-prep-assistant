@@ -45,6 +45,9 @@ Thumbs.db
 # Trae IDE skill files (not project source)
 .trae/
 
+# Reasonix IDE files (not project source)
+.reasonix/
+
 # Test coverage
 coverage/
 .nyc_output/

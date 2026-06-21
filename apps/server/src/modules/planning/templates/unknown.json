@@ -1,0 +1,62 @@
+{
+  "phases": [
+    {
+      "name": "目标拆解",
+      "description": "把模糊目标拆成可执行的子目标",
+      "order": 1,
+      "tasks": [
+        { "title": "明确目标定义", "description": "做到什么程度算成功", "priority": "high" },
+        { "title": "拆解子目标", "description": "分解为可推进的步骤", "priority": "high" },
+        { "title": "确定优先级", "description": "哪些先做、哪些后做", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "资源准备",
+      "description": "梳理所需资源与前置条件",
+      "order": 2,
+      "tasks": [
+        { "title": "梳理所需资源", "description": "人力、工具、信息", "priority": "medium" },
+        { "title": "确认前置条件", "description": "依赖项与阻塞项", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "执行推进",
+      "description": "按计划执行与跟踪",
+      "order": 3,
+      "tasks": [
+        { "title": "启动核心任务", "description": "从最高优先级开始", "priority": "high" },
+        { "title": "定期检查进度", "description": "按节点复盘", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "验收复盘",
+      "description": "验收成果与总结经验",
+      "order": 4,
+      "tasks": [
+        { "title": "验收成果", "description": "对照成功标准检查", "priority": "high" },
+        { "title": "复盘总结", "description": "经验沉淀与改进", "priority": "low" }
+      ]
+    }
+  ],
+  "risks": [
+    { "description": "目标不够清晰导致方向偏离", "impact": "high", "mitigation": "先明确成功标准再开始执行" },
+    { "description": "资源不足", "impact": "medium", "mitigation": "尽早梳理资源需求，寻求支持" },
+    { "description": "执行过程中失去动力", "impact": "medium", "mitigation": "设定小里程碑，保持正反馈" }
+  ],
+  "milestones": [
+    { "name": "目标明确", "description": "成功标准与子目标确认" },
+    { "name": "资源就绪", "description": "所需资源准备完成" },
+    { "name": "核心完成", "description": "核心任务执行完成" },
+    { "name": "验收通过", "description": "成果达到成功标准" }
+  ],
+  "nextActions": [
+    "先把目标描述得更具体",
+    "明确做到什么程度算成功",
+    "拆解出 3-5 个子目标"
+  ],
+  "assumptions": [
+    "目标有明确的交付物或成果",
+    "有基本的执行条件",
+    "能保证一定的推进时间"
+  ]
+}

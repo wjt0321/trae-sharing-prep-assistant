@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api, tokenStorage } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -225,13 +225,12 @@ export default function AiConfigSettingsPage() {
     streamAbortRef.current = abort;
 
     try {
-      const token = tokenStorage.getAccess();
       const res = await fetch("/api/server/ai-config/chat/stream", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           messages: [{ role: "user", content: streamInput.trim() }],
         }),

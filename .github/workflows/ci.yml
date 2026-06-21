@@ -83,3 +83,75 @@ jobs:
           DATABASE_URL: "file:./test.db"
           JWT_SECRET: "test-secret"
           AI_GATEWAY_PROVIDER: "mock"
+
+  e2e-test:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @ai-task-manager/shared build
+
+      - name: Generate Prisma client
+        run: pnpm --filter @ai-task-manager/server exec prisma generate
+
+      - name: Run E2E tests
+        working-directory: apps/server
+        run: npx jest --config ./test/jest-e2e.json --forceExit
+        env:
+          DATABASE_URL: "file:./test.e2e.db"
+          JWT_SECRET: "e2e-test-secret-not-for-production"
+          JWT_EXPIRES_IN: "1d"
+          JWT_REFRESH_EXPIRES_IN: "7d"
+          AI_GATEWAY_PROVIDER: "mock"
+          TASK_WORKER_INTERVAL_MS: "3600000"
+          SESSION_CLEANUP_INTERVAL_MS: "3600000"
+          BCRYPT_SALT_ROUNDS: "4"
+          RATE_LIMIT_PER_MINUTE: "1000"
+          RATE_LIMIT_AUTH_PER_MINUTE: "1000"
+
+  frontend-test:
+    name: Frontend + Shared Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @ai-task-manager/shared build
+
+      - name: Run shared package tests
+        run: pnpm --filter @ai-task-manager/shared test
+
+      - name: Run frontend tests
+        run: pnpm --filter @ai-task-manager/web test

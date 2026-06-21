@@ -1,0 +1,63 @@
+{
+  "phases": [
+    {
+      "name": "准备阶段",
+      "description": "明确分享目标、受众分析与内容定位",
+      "order": 1,
+      "tasks": [
+        { "title": "确定分享主题与核心信息", "description": "提炼 1-3 个核心要点", "priority": "high" },
+        { "title": "分析受众背景与需求", "description": "了解听众的知识水平与期望", "priority": "medium" },
+        { "title": "确定分享形式与时长分配", "description": "讲解 / 演示 / 互动的比例", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "内容制作",
+      "description": "搭建大纲、制作素材与演示材料",
+      "order": 2,
+      "tasks": [
+        { "title": "搭建内容大纲", "description": "开场 → 主体 → 结尾的结构", "priority": "high" },
+        { "title": "制作演示材料", "description": "PPT / 代码 demo / 案例素材", "priority": "high" },
+        { "title": "准备互动环节", "description": "提问 / 练习 / 讨论设计", "priority": "low" }
+      ]
+    },
+    {
+      "name": "试讲演练",
+      "description": "内部试讲、收集反馈与迭代",
+      "order": 3,
+      "tasks": [
+        { "title": "完成首次试讲", "description": "至少 1 次完整试讲", "priority": "high" },
+        { "title": "收集反馈并迭代", "description": "根据反馈调整内容与节奏", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "正式分享",
+      "description": "现场交付与后续跟进",
+      "order": 4,
+      "tasks": [
+        { "title": "完成正式分享", "description": "按计划交付", "priority": "high" },
+        { "title": "整理分享资料与回顾", "description": "归档材料、收集听众反馈", "priority": "low" }
+      ]
+    }
+  ],
+  "risks": [
+    { "description": "内容过多导致超时", "impact": "medium", "mitigation": "预留 20% 时间缓冲，准备可裁剪内容" },
+    { "description": "受众水平差异大", "impact": "medium", "mitigation": "准备基础与进阶两层内容" },
+    { "description": "演示环境出问题", "impact": "high", "mitigation": "提前测试环境，准备离线方案" }
+  ],
+  "milestones": [
+    { "name": "大纲定稿", "description": "内容大纲确认完成" },
+    { "name": "材料就绪", "description": "所有演示材料制作完成" },
+    { "name": "试讲通过", "description": "试讲反馈达标" },
+    { "name": "分享完成", "description": "正式分享交付" }
+  ],
+  "nextActions": [
+    "先确定分享的核心主题与 1-3 个要点",
+    "列出目标受众的特征与期望",
+    "搭建内容大纲的初版框架"
+  ],
+  "assumptions": [
+    "分享日期已确定或可协调",
+    "有基本的演示工具可用",
+    "受众规模在可控范围内"
+  ]
+}

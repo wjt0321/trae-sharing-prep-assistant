@@ -30,9 +30,15 @@ export class AiGatewayService {
     private readonly configService: ConfigService,
   ) {
     this.defaultProvider = this.configService.get<string>('AI_GATEWAY_PROVIDER', 'mock');
+    // 专用加密密钥，不再回退到 JWT_SECRET
     this.encryptionSecret =
-      this.configService.get<string>('AI_CONFIG_ENCRYPTION_KEY') ||
-      this.configService.get<string>('JWT_SECRET', 'dev-secret-please-change');
+      this.configService.get<string>('AI_CONFIG_ENCRYPTION_KEY') ?? '';
+    if (!this.encryptionSecret) {
+      this.logger.warn(
+        'AI_CONFIG_ENCRYPTION_KEY 未配置，AI 真实调用已禁用（回退到 mock 模式）。' +
+          '请配置专用加密密钥后重启服务。',
+      );
+    }
     this.logger.log(`AI 网关已初始化，默认 provider=${this.defaultProvider}`);
   }
 
@@ -184,6 +190,11 @@ export class AiGatewayService {
    * 返回解密后的 API Key，仅在本服务内部使用
    */
   private async getActiveConfig(): Promise<ActiveConfig | null> {
+    // 加密密钥未配置时直接回退 mock
+    if (!this.encryptionSecret) {
+      return null;
+    }
+
     const now = Date.now();
     if (this.cachedConfig && now - this.cachedAt < AiGatewayService.CACHE_TTL_MS) {
       return this.cachedConfig;
@@ -210,13 +221,18 @@ export class AiGatewayService {
       this.cachedAt = now;
       return this.cachedConfig;
     } catch (error) {
-      this.logger.error(`API Key 解密失败: ${error instanceof Error ? error.message : String(error)}`);
+      // 解密失败：可能是密钥已轮换但旧数据未迁移，提示用户重新配置
+      this.logger.error(
+        `API Key 解密失败，可能是加密密钥已变更。请通过密钥轮换脚本迁移或重新配置 API Key。` +
+          ` 错误: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
 
   /**
    * 真实 AI 调用（OpenAI 兼容协议）
+   * 429 / 5xx 自动重试（最多 3 次，指数退避：1s → 2s → 4s）
    */
   private async realChat(
     params: {
@@ -232,32 +248,66 @@ export class AiGatewayService {
       messages: params.messages,
     };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
-    });
+    const MAX_RETRIES = 3;
+    let lastError: Error | null = null;
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => res.statusText);
-      throw new Error(`AI 调用失败 HTTP ${res.status}: ${errText.slice(0, 300)}`);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.apiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(60_000),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => res.statusText);
+          const errorMsg = `AI 调用失败 HTTP ${res.status}: ${errText.slice(0, 300)}`;
+
+          // 429 (Rate Limit) 或 5xx (Server Error) 时重试
+          if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+            const backoffMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+            this.logger.warn(
+              `AI 调用返回 ${res.status}，第 ${attempt + 1} 次重试（等待 ${backoffMs}ms）`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            lastError = new Error(errorMsg);
+            continue;
+          }
+
+          throw new Error(errorMsg);
+        }
+
+        const data = await res.json();
+        const content = data?.choices?.[0]?.message?.content ?? '';
+        const inputTokens = data?.usage?.prompt_tokens ?? 0;
+        const outputTokens = data?.usage?.completion_tokens ?? Math.ceil(content.length / 4);
+
+        return {
+          content,
+          inputTokens,
+          outputTokens,
+          durationMs: Date.now() - startTime,
+        };
+      } catch (error) {
+        // 网络错误 / 超时也重试
+        if (attempt < MAX_RETRIES) {
+          const backoffMs = Math.pow(2, attempt) * 1000;
+          this.logger.warn(
+            `AI 调用异常，第 ${attempt + 1} 次重试（等待 ${backoffMs}ms）: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          lastError = error instanceof Error ? error : new Error(String(error));
+          continue;
+        }
+        throw error;
+      }
     }
 
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content ?? '';
-    const inputTokens = data?.usage?.prompt_tokens ?? 0;
-    const outputTokens = data?.usage?.completion_tokens ?? Math.ceil(content.length / 4);
-
-    return {
-      content,
-      inputTokens,
-      outputTokens,
-      durationMs: Date.now() - startTime,
-    };
+    throw lastError ?? new Error('AI 调用重试次数已耗尽');
   }
 
   /**
@@ -354,6 +404,13 @@ export class AiGatewayService {
         }
       }
     } finally {
+      // 安全释放 reader：先 cancel 取消流，再 releaseLock 释放锁
+      // 避免 reader 仍持有流时 releaseLock 导致底层流无法正确关闭
+      try {
+        await reader.cancel();
+      } catch {
+        // cancel 可能因流已结束而抛错，忽略即可
+      }
       reader.releaseLock();
     }
   }

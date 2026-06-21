@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import {
@@ -18,14 +18,24 @@ import {
  * - 业务指标聚合（目标 / 规划 / 执行 / 导出 / 模板）
  * - 系统指标（请求量 / 错误率 / 任务队列 / AI 调用 / DB）
  * - 运行时请求统计（由 RequestLogMiddleware 写入）
+ *
+ * 持久化：requestStats 定期输出到日志（防重启丢失）
  */
 @Injectable()
-export class MonitoringService {
+export class MonitoringService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MonitoringService.name);
   private readonly startedAt = new Date();
   private readonly version: string;
   private readonly env: string;
   private readonly dbPath: string;
+  private statsFlushTimer: NodeJS.Timeout | null = null;
+  private readonly statsFlushIntervalMs: number;
+  // 可配置的监控阈值
+  private readonly diskWarnMb: number;
+  private readonly diskUnhealthyMb: number;
+  private readonly jobBacklogWarn: number;
+  private readonly jobBacklogUnhealthy: number;
+  private readonly slowRequestMs: number;
 
   /** 运行时请求统计（按日 + 状态码） */
   private requestStats = new Map<
@@ -50,6 +60,50 @@ export class MonitoringService {
     const dbUrl = this.configService.get<string>('DATABASE_URL', 'file:./dev.db');
     // 解析 SQLite 文件路径（file:./dev.db → ./dev.db）
     this.dbPath = dbUrl.replace(/^file:/, '');
+    // 统计刷写间隔：默认 5 分钟
+    this.statsFlushIntervalMs = this.configService.get<number>(
+      'MONITORING_STATS_FLUSH_MS',
+      5 * 60 * 1000,
+    );
+    // 监控阈值可配置（默认值与原硬编码一致）
+    this.diskWarnMb = this.configService.get<number>('MONITORING_DISK_WARN_MB', 1024);
+    this.diskUnhealthyMb = this.configService.get<number>('MONITORING_DISK_UNHEALTHY_MB', 10240);
+    this.jobBacklogWarn = this.configService.get<number>('MONITORING_JOB_BACKLOG_WARN', 100);
+    this.jobBacklogUnhealthy = this.configService.get<number>('MONITORING_JOB_BACKLOG_UNHEALTHY', 500);
+    this.slowRequestMs = this.configService.get<number>('MONITORING_SLOW_REQUEST_MS', 1000);
+  }
+
+  onModuleInit(): void {
+    // 定期将 requestStats 输出到日志，防止重启后数据丢失
+    this.statsFlushTimer = setInterval(() => {
+      this.flushStatsToLog();
+    }, this.statsFlushIntervalMs);
+  }
+
+  onModuleDestroy(): void {
+    if (this.statsFlushTimer) {
+      clearInterval(this.statsFlushTimer);
+      this.statsFlushTimer = null;
+    }
+    // 销毁时最后刷写一次
+    this.flushStatsToLog();
+  }
+
+  /**
+   * 将当前 requestStats 输出到日志（防重启丢失）
+   */
+  private flushStatsToLog(): void {
+    if (this.requestStats.size === 0) return;
+    const summary = Array.from(this.requestStats.entries()).map(([day, stat]) => ({
+      day,
+      total: stat.total,
+      success: stat.success,
+      clientErrors: stat.clientErrors,
+      serverErrors: stat.serverErrors,
+      avgDurationMs: stat.total > 0 ? Math.round(stat.totalDurationMs / stat.total) : 0,
+      slowRequests: stat.slowRequests,
+    }));
+    this.logger.log(`请求统计快照: ${JSON.stringify(summary)}`);
   }
 
   /**
@@ -68,7 +122,7 @@ export class MonitoringService {
     };
     stat.total += 1;
     stat.totalDurationMs += durationMs;
-    if (durationMs > 1000) stat.slowRequests += 1;
+    if (durationMs > this.slowRequestMs) stat.slowRequests += 1;
     if (statusCode >= 200 && statusCode < 300) stat.success += 1;
     else if (statusCode >= 400 && statusCode < 500) stat.clientErrors += 1;
     else if (statusCode >= 500) stat.serverErrors += 1;
@@ -172,6 +226,7 @@ export class MonitoringService {
       this.prisma.executionTask.groupBy({
         by: ['status'],
         _count: { _all: true },
+        where: { deletedAt: null },
       }),
       this.prisma.exportRecord.count({
         where: { createdAt: { gte: startDate } },
@@ -407,16 +462,16 @@ export class MonitoringService {
       const dbPath = path.resolve(process.cwd(), this.dbPath);
       const stat = await fs.stat(dbPath);
       const sizeBytes = stat.size;
-      // SQLite 本地文件，阈值：1GB 警告，10GB 不健康
+      // SQLite 本地文件，阈值可配置（默认：1GB 警告，10GB 不健康）
       const sizeMb = sizeBytes / (1024 * 1024);
       let status: HealthStatusEnum = HealthStatusEnum.OK;
       let detail = `DB 文件大小: ${sizeMb.toFixed(2)} MB`;
-      if (sizeMb > 10240) {
+      if (sizeMb > this.diskUnhealthyMb) {
         status = HealthStatusEnum.UNHEALTHY;
-        detail = `DB 文件过大: ${sizeMb.toFixed(2)} MB (>10GB)`;
-      } else if (sizeMb > 1024) {
+        detail = `DB 文件过大: ${sizeMb.toFixed(2)} MB (>${this.diskUnhealthyMb}MB)`;
+      } else if (sizeMb > this.diskWarnMb) {
         status = HealthStatusEnum.DEGRADED;
-        detail = `DB 文件较大: ${sizeMb.toFixed(2)} MB (>1GB)`;
+        detail = `DB 文件较大: ${sizeMb.toFixed(2)} MB (>${this.diskWarnMb}MB)`;
       }
       return {
         name: 'disk',
@@ -444,10 +499,10 @@ export class MonitoringService {
       const running = await this.prisma.taskJob.count({
         where: { status: 'running' },
       });
-      // 阈值：积压 >100 警告，>500 不健康
+      // 阈值可配置（默认：积压 >100 警告，>500 不健康）
       let status: HealthStatusEnum = HealthStatusEnum.OK;
-      if (queued > 500) status = HealthStatusEnum.UNHEALTHY;
-      else if (queued > 100) status = HealthStatusEnum.DEGRADED;
+      if (queued > this.jobBacklogUnhealthy) status = HealthStatusEnum.UNHEALTHY;
+      else if (queued > this.jobBacklogWarn) status = HealthStatusEnum.DEGRADED;
       return {
         name: 'task-backlog',
         status,

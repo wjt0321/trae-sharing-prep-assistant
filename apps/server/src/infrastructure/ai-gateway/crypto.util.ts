@@ -76,3 +76,16 @@ export function extractKeyHint(apiKey: string): string {
   }
   return apiKey.slice(-4);
 }
+
+/**
+ * 密钥轮换：用旧密钥解密后用新密钥重新加密
+ * 用于 AI_CONFIG_ENCRYPTION_KEY 变更后迁移已存储的 API Key
+ * @param encrypted 旧密文（iv:authTag:ciphertext 格式）
+ * @param oldSecret 旧加密密钥
+ * @param newSecret 新加密密钥
+ * @returns 新密文（iv:authTag:ciphertext 格式）
+ */
+export function reEncrypt(encrypted: string, oldSecret: string, newSecret: string): string {
+  const plaintext = decrypt(encrypted, oldSecret);
+  return encrypt(plaintext, newSecret);
+}

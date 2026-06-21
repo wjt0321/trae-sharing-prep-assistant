@@ -40,10 +40,15 @@ export class AiConfigService {
     private readonly aiGateway: AiGatewayService,
     private readonly auditService: AuditService,
   ) {
-    // 加密密钥优先取专用变量，回退到 JWT_SECRET
+    // 专用加密密钥，不再回退到 JWT_SECRET
     this.encryptionSecret =
-      this.configService.get<string>('AI_CONFIG_ENCRYPTION_KEY') ||
-      this.configService.get<string>('JWT_SECRET', 'dev-secret-please-change');
+      this.configService.get<string>('AI_CONFIG_ENCRYPTION_KEY') ?? '';
+    if (!this.encryptionSecret) {
+      this.logger.warn(
+        'AI_CONFIG_ENCRYPTION_KEY 未配置，无法加密保存 API Key。' +
+          '请配置专用加密密钥后重启服务。',
+      );
+    }
   }
 
   /**
@@ -97,24 +102,45 @@ export class AiConfigService {
       throw new ApiError(ErrorCode.BAD_REQUEST, { message: '服务商、地址、API Key、模型名均不能为空' });
     }
 
+    // 加密密钥未配置时拒绝保存，避免明文落库
+    if (!this.encryptionSecret) {
+      throw new ApiError(ErrorCode.AI_GATEWAY_UNAVAILABLE, {
+        message:
+          'AI 加密密钥（AI_CONFIG_ENCRYPTION_KEY）未配置，无法安全保存 API Key。' +
+          '请配置该环境变量后重启服务再尝试。',
+      });
+    }
+
     const apiKeyEnc = encrypt(dto.apiKey, this.encryptionSecret);
     const apiKeyHint = extractKeyHint(dto.apiKey);
 
-    // 先将所有现有配置设为非活跃
-    await this.prisma.aiProviderConfig.updateMany({
-      where: { isActive: true },
-      data: { isActive: false },
-    });
+    // 在事务中确保唯一激活（避免竞态导致多个 isActive=true）
+    const config = await this.prisma.$transaction(async (tx) => {
+      // 先将所有现有配置设为非活跃
+      await tx.aiProviderConfig.updateMany({
+        where: { isActive: true },
+        data: { isActive: false },
+      });
 
-    // 查找是否已有配置（单条记录模式，upsert）
-    const existing = await this.prisma.aiProviderConfig.findFirst({
-      orderBy: { updatedAt: 'desc' },
-    });
+      // 查找是否已有配置（单条记录模式，upsert）
+      const existing = await tx.aiProviderConfig.findFirst({
+        orderBy: { updatedAt: 'desc' },
+      });
 
-    let config;
-    if (existing) {
-      config = await this.prisma.aiProviderConfig.update({
-        where: { id: existing.id },
+      if (existing) {
+        return tx.aiProviderConfig.update({
+          where: { id: existing.id },
+          data: {
+            provider: dto.provider,
+            baseUrl: dto.baseUrl,
+            apiKeyEnc,
+            apiKeyHint,
+            modelName: dto.modelName,
+            isActive: true,
+          },
+        });
+      }
+      return tx.aiProviderConfig.create({
         data: {
           provider: dto.provider,
           baseUrl: dto.baseUrl,
@@ -124,18 +150,7 @@ export class AiConfigService {
           isActive: true,
         },
       });
-    } else {
-      config = await this.prisma.aiProviderConfig.create({
-        data: {
-          provider: dto.provider,
-          baseUrl: dto.baseUrl,
-          apiKeyEnc,
-          apiKeyHint,
-          modelName: dto.modelName,
-          isActive: true,
-        },
-      });
-    }
+    });
 
     this.logger.log(`AI 网关配置已更新: provider=${config.provider}, model=${config.modelName}`);
     this.aiGateway.invalidateCache();

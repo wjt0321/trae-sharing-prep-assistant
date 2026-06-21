@@ -57,6 +57,20 @@ export class ExecutionController {
     return this.executionService.getNextSteps(goalId, user.userId);
   }
 
+  @Get('goals/:goalId/tasks/history/recent')
+  getRecentHistory(
+    @Param('goalId') goalId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 10;
+    return this.executionService.getRecentHistory(
+      goalId,
+      user.userId,
+      isNaN(parsedLimit) ? 10 : parsedLimit,
+    );
+  }
+
   @Get('tasks/:id/history')
   getStatusHistory(
     @Param('id') id: string,

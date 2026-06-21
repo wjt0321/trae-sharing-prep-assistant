@@ -42,12 +42,16 @@ export class CollaborationController {
     @Query('anchorId') anchorId?: string,
     @Query('type') type?: CommentTypeEnum,
     @Query('unresolvedOnly') unresolvedOnly?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
     return this.collaborationService.findAllComments(goalId, user.userId, {
       anchorType,
       anchorId,
       type,
       unresolvedOnly: unresolvedOnly === 'true',
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
     });
   }
 

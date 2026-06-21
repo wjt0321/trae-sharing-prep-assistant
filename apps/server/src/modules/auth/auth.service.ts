@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { ApiError, ErrorCode } from '@ai-task-manager/shared';
 import { AuditService } from '../audit/audit.service';
@@ -16,6 +16,8 @@ import type { LoginDto } from './dto/login.dto';
 import type { RefreshDto } from './dto/refresh.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { ChangePasswordDto } from './dto/change-password.dto';
+import type { FailureRecordResult } from './login-attempt.tracker';
+import { LoginAttemptTracker } from './login-attempt.tracker';
 
 interface AccessTokenPayload {
   sub: string;
@@ -30,13 +32,22 @@ interface RefreshTokenPayload {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly bcryptSaltRounds: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
-  ) {}
+    private readonly loginAttemptTracker: LoginAttemptTracker,
+  ) {
+    // bcrypt salt rounds 可配置，默认 12（生产推荐 ≥10）
+    // 注意：env 变量始终为字符串，需显式转换为数字，否则 bcrypt 会把字符串当作 salt 解析而报错
+    const saltRoundsRaw = this.configService.get<string | number>('BCRYPT_SALT_ROUNDS', 12);
+    this.bcryptSaltRounds = typeof saltRoundsRaw === 'number'
+      ? saltRoundsRaw
+      : parseInt(String(saltRoundsRaw), 10) || 12;
+  }
 
   async register(dto: RegisterDto, meta?: AuditMeta) {
     // 检查邮箱是否已注册
@@ -55,7 +66,7 @@ export class AuthService {
       throw new ApiError(ErrorCode.AUTH_EMAIL_ALREADY_USED);
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, this.bcryptSaltRounds);
 
     // 创建用户 + 个人工作区 + 成员关系（事务保证一致性）
     const result = await this.prisma.$transaction(async (tx) => {
@@ -112,23 +123,43 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, meta?: AuditMeta) {
+    // 1. 检查账户锁定状态
+    const lockStatus = this.loginAttemptTracker.isLocked(dto.email);
+    if (lockStatus.locked) {
+      const remainingMin = Math.ceil(lockStatus.remainingMs / 60_000);
+      throw new ApiError(ErrorCode.AUTH_ACCOUNT_LOCKED, {
+        message: `登录失败次数过多，账户已锁定，请 ${remainingMin} 分钟后再试`,
+        details: { locked: true, remainingMs: lockStatus.remainingMs },
+      });
+    }
+
+    // 2. 递增延迟（基于历史失败次数，第 5 次起逐次增加等待）
+    const delayMs = this.loginAttemptTracker.getDelay(dto.email);
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    // 3. 查找用户
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
     if (!user) {
+      const failureInfo = this.loginAttemptTracker.recordFailure(dto.email);
       await this.auditService.record({
         actorEmail: dto.email,
         action: AuditActionEnum.LOGIN,
         resourceType: AuditResourceTypeEnum.SESSION,
         result: AuditResultEnum.FAILURE,
         errorMessage: '用户不存在',
+        detail: { failureCount: failureInfo.count },
         ...meta,
       });
-      throw new ApiError(ErrorCode.AUTH_INVALID_CREDENTIALS);
+      throw this.buildCredentialsError(failureInfo);
     }
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
+      const failureInfo = this.loginAttemptTracker.recordFailure(dto.email);
       await this.auditService.record({
         actorId: user.id,
         actorEmail: user.email,
@@ -136,10 +167,14 @@ export class AuthService {
         resourceType: AuditResourceTypeEnum.SESSION,
         result: AuditResultEnum.FAILURE,
         errorMessage: '密码错误',
+        detail: { failureCount: failureInfo.count },
         ...meta,
       });
-      throw new ApiError(ErrorCode.AUTH_INVALID_CREDENTIALS);
+      throw this.buildCredentialsError(failureInfo);
     }
+
+    // 4. 登录成功，清除失败计数
+    this.loginAttemptTracker.clear(dto.email);
 
     this.logger.log(`用户登录成功: ${user.email}`);
 
@@ -159,6 +194,28 @@ export class AuthService {
     };
   }
 
+  /**
+   * 根据失败记录构造凭证错误（附带剩余尝试次数或锁定信息）
+   */
+  private buildCredentialsError(failureInfo: FailureRecordResult): ApiError {
+    if (failureInfo.locked) {
+      const remainingMin = Math.ceil(failureInfo.remainingMs / 60_000);
+      return new ApiError(ErrorCode.AUTH_ACCOUNT_LOCKED, {
+        message: `登录失败次数过多，账户已锁定，请 ${remainingMin} 分钟后再试`,
+        details: { remainingAttempts: 0, locked: true, remainingMs: failureInfo.remainingMs },
+      });
+    }
+    const remaining = Math.max(0, this.loginAttemptTracker.lockThreshold - failureInfo.count);
+    const message =
+      remaining > 0
+        ? `邮箱或密码错误，剩余 ${remaining} 次尝试机会`
+        : '邮箱或密码错误，账户已锁定';
+    return new ApiError(ErrorCode.AUTH_INVALID_CREDENTIALS, {
+      message,
+      details: { remainingAttempts: remaining, locked: false },
+    });
+  }
+
   async refresh(dto: RefreshDto) {
     let payload: RefreshTokenPayload;
     try {
@@ -167,13 +224,34 @@ export class AuthService {
       throw new ApiError(ErrorCode.AUTH_TOKEN_INVALID);
     }
 
-    const session = await this.prisma.session.findFirst({
+    const tokenHash = this.hashToken(dto.refreshToken);
+
+    // 优先按 hash 查找（新模式）
+    let session = await this.prisma.session.findFirst({
       where: {
         id: payload.sid,
-        refreshToken: dto.refreshToken,
+        refreshTokenHash: tokenHash,
         revokedAt: null,
       },
     });
+
+    // 向后兼容：旧 session 存储明文 refreshToken，首次刷新时迁移到 hash 模式
+    if (!session) {
+      session = await this.prisma.session.findFirst({
+        where: {
+          id: payload.sid,
+          refreshToken: dto.refreshToken,
+          revokedAt: null,
+        },
+      });
+      if (session) {
+        await this.prisma.session.update({
+          where: { id: session.id },
+          data: { refreshTokenHash: tokenHash, refreshToken: null },
+        });
+      }
+    }
+
     if (!session || session.expiresAt < new Date()) {
       throw new ApiError(ErrorCode.AUTH_TOKEN_EXPIRED);
     }
@@ -289,7 +367,7 @@ export class AuthService {
       });
     }
 
-    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    const passwordHash = await bcrypt.hash(dto.newPassword, this.bcryptSaltRounds);
     await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash },
@@ -318,6 +396,7 @@ export class AuthService {
 
   /**
    * 签发 access token + refresh token，并创建 session 记录
+   * Refresh Token 以 SHA-256 哈希存储，数据库中不含明文
    */
   private async issueTokens(userId: string, email: string) {
     const accessPayload: AccessTokenPayload = { sub: userId, email };
@@ -337,15 +416,18 @@ export class AuthService {
       expiresIn: refreshExpiresIn as any,
     });
 
-    // 计算 refresh token 过期时间
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    // 存储 refresh token 的 SHA-256 哈希（非明文）
+    const refreshTokenHash = this.hashToken(refreshToken);
+
+    // 过期时间从配置动态计算，不再写死 7 天
+    const refreshExpiresInSeconds = this.parseExpiresToSeconds(refreshExpiresIn);
+    const expiresAt = new Date(Date.now() + refreshExpiresInSeconds * 1000);
 
     await this.prisma.session.create({
       data: {
         id: sessionId,
         userId,
-        refreshToken,
+        refreshTokenHash,
         expiresAt,
       },
     });
@@ -356,6 +438,13 @@ export class AuthService {
       expiresIn: this.parseExpiresToSeconds(expiresIn),
       tokenType: 'Bearer' as const,
     };
+  }
+
+  /**
+   * 计算 token 的 SHA-256 哈希（hex 编码）
+   */
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   private parseExpiresToSeconds(expiresIn: string): number {

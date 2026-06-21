@@ -45,7 +45,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
     } else if (exception instanceof Error) {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
-      payload = { code: 'INTERNAL_ERROR', message: exception.message };
+      // 生产环境不暴露内部错误细节，仅记录到日志
+      const isProduction = process.env.NODE_ENV === 'production';
+      payload = {
+        code: 'INTERNAL_ERROR',
+        message: isProduction ? '服务器内部错误，请稍后重试' : exception.message,
+      };
       this.logger.error(`未处理的异常: ${exception.message}`, exception.stack);
     } else {
       status = HttpStatus.INTERNAL_SERVER_ERROR;

@@ -34,6 +34,7 @@ export const ErrorCode = {
   AUTH_TOKEN_EXPIRED: { code: 'AUTH_TOKEN_EXPIRED', status: 401, message: '登录已过期' },
   AUTH_TOKEN_INVALID: { code: 'AUTH_TOKEN_INVALID', status: 401, message: '登录态无效' },
   AUTH_EMAIL_ALREADY_USED: { code: 'AUTH_EMAIL_ALREADY_USED', status: 409, message: '邮箱已被注册' },
+  AUTH_ACCOUNT_LOCKED: { code: 'AUTH_ACCOUNT_LOCKED', status: 423, message: '账户已锁定，请稍后再试' },
 
   // 工作区
   WORKSPACE_NOT_FOUND: { code: 'WORKSPACE_NOT_FOUND', status: 404, message: '工作区不存在' },

@@ -36,13 +36,13 @@ export class RateLimitMiddleware implements NestMiddleware {
 
   constructor(private readonly configService: ConfigService) {
     this.defaultLimit = Number(
-      this.configService.get('RATE_LIMIT_DEFAULT', '120'),
+      this.configService.get('RATE_LIMIT_PER_MINUTE', '120'),
     );
     this.defaultWindowMs = Number(
       this.configService.get('RATE_LIMIT_WINDOW_MS', '60000'),
     );
     this.authLimit = Number(
-      this.configService.get('RATE_LIMIT_AUTH', '10'),
+      this.configService.get('RATE_LIMIT_AUTH_PER_MINUTE', '10'),
     );
 
     // 定时清理过期条目

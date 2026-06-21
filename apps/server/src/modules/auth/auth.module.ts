@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { LoginAttemptTracker } from './login-attempt.tracker';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
@@ -24,7 +25,7 @@ import { AuditModule } from '../audit/audit.module';
     AuditModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, LoginAttemptTracker],
   exports: [AuthService, JwtAuthGuard, JwtModule],
 })
 export class AuthModule {}

@@ -35,11 +35,24 @@ export class StorageService {
   }
 
   /**
+   * 校验文件名，防止路径穿越攻击
+   * 解析后的绝对路径必须在上传目录内
+   */
+  private resolveSafePath(filename: string): string {
+    const resolved = path.resolve(this.uploadDir, filename);
+    const normalizedDir = path.normalize(this.uploadDir + path.sep);
+    if (!resolved.startsWith(normalizedDir)) {
+      throw new Error(`非法文件路径: ${filename}`);
+    }
+    return resolved;
+  }
+
+  /**
    * 保存文件
    */
   async save(filename: string, content: string | Buffer): Promise<string> {
     await this.ensureDir();
-    const filePath = path.join(this.uploadDir, filename);
+    const filePath = this.resolveSafePath(filename);
     await fs.writeFile(filePath, content);
     return filePath;
   }
@@ -48,7 +61,7 @@ export class StorageService {
    * 读取文件
    */
   async read(filename: string): Promise<Buffer> {
-    const filePath = path.join(this.uploadDir, filename);
+    const filePath = this.resolveSafePath(filename);
     return fs.readFile(filePath);
   }
 
@@ -56,7 +69,7 @@ export class StorageService {
    * 读取文件文本
    */
   async readText(filename: string): Promise<string> {
-    const filePath = path.join(this.uploadDir, filename);
+    const filePath = this.resolveSafePath(filename);
     return fs.readFile(filePath, 'utf-8');
   }
 
@@ -64,7 +77,7 @@ export class StorageService {
    * 删除文件
    */
   async remove(filename: string): Promise<void> {
-    const filePath = path.join(this.uploadDir, filename);
+    const filePath = this.resolveSafePath(filename);
     await fs.unlink(filePath);
   }
 
@@ -72,7 +85,7 @@ export class StorageService {
    * 检查文件是否存在
    */
   async exists(filename: string): Promise<boolean> {
-    const filePath = path.join(this.uploadDir, filename);
+    const filePath = this.resolveSafePath(filename);
     try {
       await fs.access(filePath);
       return true;
@@ -85,6 +98,6 @@ export class StorageService {
    * 获取文件完整路径
    */
   resolvePath(filename: string): string {
-    return path.join(this.uploadDir, filename);
+    return this.resolveSafePath(filename);
   }
 }

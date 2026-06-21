@@ -15,6 +15,7 @@ import {
   type KnowledgeAssetResponseDto,
   type KnowledgeAssetListItemDto,
 } from '@ai-task-manager/shared';
+import { GoalPermissionService } from '../goal/goal-permission.service';
 import type { CreateTemplateDto } from './dto/knowledge.dto';
 import type { UpdateTemplateDto } from './dto/knowledge.dto';
 import type { CreateTemplateFromGoalDto } from './dto/knowledge.dto';
@@ -28,7 +29,10 @@ import type { AssetListQueryDto } from './dto/knowledge.dto';
 export class KnowledgeService {
   private readonly logger = new Logger(KnowledgeService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly goalPermissionService: GoalPermissionService,
+  ) {}
 
   // ============================================================
   // 模板 CRUD
@@ -151,7 +155,7 @@ export class KnowledgeService {
     userId: string,
     dto: CreateTemplateFromGoalDto,
   ): Promise<TemplateResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     // 从目标字段构造模板内容
     const content: TemplateContentDto = {
@@ -352,7 +356,7 @@ export class KnowledgeService {
     if (!exportRecord) {
       throw new ApiError(ErrorCode.NOT_FOUND, { message: '导出记录不存在' });
     }
-    await this.getGoalWithMembershipCheck(exportRecord.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(exportRecord.goalId, userId);
 
     const goal = await this.prisma.goal.findUnique({
       where: { id: exportRecord.goalId },
@@ -390,17 +394,6 @@ export class KnowledgeService {
         message: '你不是该工作区的成员',
       });
     }
-  }
-
-  private async getGoalWithMembershipCheck(goalId: string, userId: string) {
-    const goal = await this.prisma.goal.findFirst({
-      where: { id: goalId, deletedAt: null },
-    });
-    if (!goal) {
-      throw new ApiError(ErrorCode.GOAL_NOT_FOUND);
-    }
-    await this.requireMembership(goal.workspaceId, userId);
-    return goal;
   }
 
   private parseContent(contentStr: string): TemplateContentDto {

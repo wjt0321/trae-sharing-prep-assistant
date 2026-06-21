@@ -9,6 +9,7 @@ import {
   CommentTypeEnum,
   type CommentResponseDto,
   type ActivityEventDto,
+  type PaginatedResult,
 } from "@ai-task-manager/shared";
 
 // ============================================================
@@ -30,6 +31,10 @@ export default function CollaborationPage() {
 
   const [goal, setGoal] = useState<GoalBrief | null>(null);
   const [comments, setComments] = useState<CommentResponseDto[]>([]);
+  const [commentsPage, setCommentsPage] = useState(1);
+  const [commentsTotalPages, setCommentsTotalPages] = useState(1);
+  const [commentsTotal, setCommentsTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [activities, setActivities] = useState<ActivityEventDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,11 +44,16 @@ export default function CollaborationPage() {
     try {
       const [goalData, commentsData, activitiesData] = await Promise.all([
         api.get<GoalBrief>(`/goals/${goalId}`),
-        api.get<CommentResponseDto[]>(`/goals/${goalId}/comments`),
+        api.get<PaginatedResult<CommentResponseDto>>(
+          `/goals/${goalId}/comments?page=1&pageSize=20`,
+        ),
         api.get<ActivityEventDto[]>(`/goals/${goalId}/activities?limit=30`),
       ]);
       setGoal(goalData);
-      setComments(commentsData);
+      setComments(commentsData.items);
+      setCommentsPage(commentsData.page);
+      setCommentsTotalPages(commentsData.totalPages);
+      setCommentsTotal(commentsData.total);
       setActivities(activitiesData);
     } catch {
       setError("加载失败");
@@ -51,6 +61,23 @@ export default function CollaborationPage() {
       setLoading(false);
     }
   }, [goalId]);
+
+  const loadMoreComments = async () => {
+    if (loadingMore || commentsPage >= commentsTotalPages) return;
+    setLoadingMore(true);
+    try {
+      const data = await api.get<PaginatedResult<CommentResponseDto>>(
+        `/goals/${goalId}/comments?page=${commentsPage + 1}&pageSize=20`,
+      );
+      setComments((prev) => [...prev, ...data.items]);
+      setCommentsPage(data.page);
+      setCommentsTotalPages(data.totalPages);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -104,7 +131,7 @@ export default function CollaborationPage() {
           active={tab === "comments"}
           onClick={() => setTab("comments")}
           label="评论"
-          count={comments.length}
+          count={commentsTotal}
         />
         <TabButton
           active={tab === "activities"}
@@ -122,6 +149,9 @@ export default function CollaborationPage() {
             comments={comments}
             onChanged={loadData}
             onError={setError}
+            hasMore={commentsPage < commentsTotalPages}
+            loadingMore={loadingMore}
+            onLoadMore={loadMoreComments}
           />
         ) : (
           <ActivitiesSection activities={activities} />
@@ -170,11 +200,17 @@ function CommentsSection({
   comments,
   onChanged,
   onError,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: {
   goalId: string;
   comments: CommentResponseDto[];
   onChanged: () => void;
   onError: (msg: string) => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }) {
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -288,6 +324,18 @@ function CommentsSection({
               submitting={submitting}
             />
           ))}
+          {hasMore && (
+            <div className="pt-2 text-center">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? "加载中..." : "加载更多"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -11,6 +12,9 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 4000);
   const corsOrigin = configService.get<string>('CORS_ORIGIN', 'http://localhost:3000');
+
+  // Cookie 解析（用于 httpOnly Cookie 存储 Token）
+  app.use(cookieParser());
 
   // 全局 API 前缀：所有路由以 /api 开头
   app.setGlobalPrefix('api', {

@@ -75,21 +75,24 @@ export class PromptRegistryService {
     if (existing) {
       // 创建新版本
       const newVersion = existing.version + 1;
-      // 先把旧版本设为非活跃
-      await this.prisma.promptTemplate.updateMany({
-        where: { name: dto.name, isActive: true },
-        data: { isActive: false },
-      });
-      const created = await this.prisma.promptTemplate.create({
-        data: {
-          name: dto.name,
-          description: dto.description ?? null,
-          systemPrompt: dto.systemPrompt,
-          userTemplate: dto.userTemplate,
-          variablesJson,
-          version: newVersion,
-          isActive: true,
-        },
+      // 在事务中确保同一 name 只有一个 isActive=true
+      const created = await this.prisma.$transaction(async (tx) => {
+        // 先把旧版本设为非活跃
+        await tx.promptTemplate.updateMany({
+          where: { name: dto.name, isActive: true },
+          data: { isActive: false },
+        });
+        return tx.promptTemplate.create({
+          data: {
+            name: dto.name,
+            description: dto.description ?? null,
+            systemPrompt: dto.systemPrompt,
+            userTemplate: dto.userTemplate,
+            variablesJson,
+            version: newVersion,
+            isActive: true,
+          },
+        });
       });
       this.logger.log(`提示词模板已创建新版本: ${dto.name} v${newVersion}`);
       return this.toDto(created);
@@ -129,22 +132,25 @@ export class PromptRegistryService {
 
     // 创建新版本
     const newVersion = existing.version + 1;
-    await this.prisma.promptTemplate.updateMany({
-      where: { name: existing.name, isActive: true },
-      data: { isActive: false },
+    // 在事务中确保同一 name 只有一个 isActive=true
+    const created = await this.prisma.$transaction(async (tx) => {
+      await tx.promptTemplate.updateMany({
+        where: { name: existing.name, isActive: true },
+        data: { isActive: false },
+      });
+      return tx.promptTemplate.create({
+        data: {
+          name: existing.name,
+          description: dto.description ?? existing.description,
+          systemPrompt: dto.systemPrompt ?? existing.systemPrompt,
+          userTemplate: dto.userTemplate ?? existing.userTemplate,
+          variablesJson,
+          version: newVersion,
+          isActive: true,
+        },
+      });
     });
 
-    const created = await this.prisma.promptTemplate.create({
-      data: {
-        name: existing.name,
-        description: dto.description ?? existing.description,
-        systemPrompt: dto.systemPrompt ?? existing.systemPrompt,
-        userTemplate: dto.userTemplate ?? existing.userTemplate,
-        variablesJson,
-        version: newVersion,
-        isActive: true,
-      },
-    });
     this.logger.log(`提示词模板已更新: ${existing.name} v${newVersion}`);
     return this.toDto(created);
   }
@@ -155,14 +161,17 @@ export class PromptRegistryService {
     if (!template) {
       throw new ApiError(ErrorCode.NOT_FOUND, { message: '提示词模板不存在' });
     }
-    // 先把同 name 的其他版本设为非活跃
-    await this.prisma.promptTemplate.updateMany({
-      where: { name: template.name, isActive: true },
-      data: { isActive: false },
-    });
-    const updated = await this.prisma.promptTemplate.update({
-      where: { id },
-      data: { isActive: true },
+    // 在事务中确保同一 name 只有一个 isActive=true
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // 先把同 name 的其他版本设为非活跃
+      await tx.promptTemplate.updateMany({
+        where: { name: template.name, isActive: true },
+        data: { isActive: false },
+      });
+      return tx.promptTemplate.update({
+        where: { id },
+        data: { isActive: true },
+      });
     });
     this.logger.log(`提示词模板已激活: ${template.name} v${template.version}`);
     return this.toDto(updated);

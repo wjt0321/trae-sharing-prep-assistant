@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
+import { GoalPermissionService } from '../goal/goal-permission.service';
 import {
   ApiError,
   ErrorCode,
@@ -14,6 +16,8 @@ import {
   type AssignmentHistoryDto,
   type ActivityEventDto,
   type ActivityListQueryDto,
+  type PaginatedResult,
+  normalizePagination,
 } from '@ai-task-manager/shared';
 import type { CreateCommentDto } from './dto/collaboration.dto';
 import type { UpdateCommentDto } from './dto/collaboration.dto';
@@ -26,6 +30,7 @@ export class CollaborationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
+    private readonly goalPermissionService: GoalPermissionService,
   ) {}
 
   // ============================================================
@@ -40,27 +45,55 @@ export class CollaborationService {
       anchorId?: string;
       type?: CommentTypeEnum;
       unresolvedOnly?: boolean;
+      page?: number;
+      pageSize?: number;
     },
-  ): Promise<CommentResponseDto[]> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+  ): Promise<CommentResponseDto[] | PaginatedResult<CommentResponseDto>> {
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
-    const where: Record<string, unknown> = { goalId: goal.id };
+    const where: Prisma.CommentWhereInput = { goalId: goal.id };
     if (query?.anchorType) where.anchorType = query.anchorType;
     if (query?.anchorId) where.anchorId = query.anchorId;
     if (query?.type) where.type = query.type;
     if (query?.unresolvedOnly) where.resolvedAt = null;
 
     // 只查顶层评论，回复在应用层组装
-    const comments = await this.prisma.comment.findMany({
-      where: { ...where, parentId: null },
-      orderBy: { createdAt: 'asc' },
-    });
+    const topWhere = { ...where, parentId: null, deletedAt: null };
+    const usePagination = !!(query?.page || query?.pageSize);
 
-    // 查询所有回复
+    let skip: number | undefined;
+    let take: number | undefined;
+    let page = 1;
+    let pageSize = 20;
+
+    if (usePagination) {
+      const pagination = normalizePagination({
+        page: query?.page,
+        pageSize: query?.pageSize,
+      });
+      page = pagination.page;
+      pageSize = pagination.pageSize;
+      skip = pagination.skip;
+      take = pagination.take;
+    }
+
+    const [total, comments] = await Promise.all([
+      usePagination
+        ? this.prisma.comment.count({ where: topWhere })
+        : Promise.resolve(0),
+      this.prisma.comment.findMany({
+        where: topWhere,
+        orderBy: { createdAt: 'asc' },
+        skip,
+        take,
+      }),
+    ]);
+
+    // 查询所有回复（也过滤软删除）
     const topIds = comments.map((c) => c.id);
     const replies = topIds.length > 0
       ? await this.prisma.comment.findMany({
-          where: { parentId: { in: topIds } },
+          where: { parentId: { in: topIds }, deletedAt: null },
           orderBy: { createdAt: 'asc' },
         })
       : [];
@@ -80,17 +113,30 @@ export class CollaborationService {
       replyMap.set(r.parentId!, arr);
     }
 
-    return comments.map((c) =>
+    const items = comments.map((c) =>
       this.toCommentResponse(c, userMap, (replyMap.get(c.id) ?? []).map((r) => this.toCommentResponse(r, userMap))),
     );
+
+    if (usePagination) {
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      };
+    }
+    return items;
   }
 
   async createComment(goalId: string, dto: CreateCommentDto, userId: string): Promise<CommentResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     // 校验父评论
     if (dto.parentId) {
-      const parent = await this.prisma.comment.findUnique({ where: { id: dto.parentId } });
+      const parent = await this.prisma.comment.findFirst({
+        where: { id: dto.parentId, deletedAt: null },
+      });
       if (!parent || parent.goalId !== goal.id) {
         throw new ApiError(ErrorCode.BAD_REQUEST, { message: '父评论不存在或不属于该目标' });
       }
@@ -98,7 +144,9 @@ export class CollaborationService {
 
     // 校验锚点（task 锚点需验证任务存在）
     if (dto.anchorType === CommentAnchorTypeEnum.TASK && dto.anchorId) {
-      const task = await this.prisma.executionTask.findUnique({ where: { id: dto.anchorId } });
+      const task = await this.prisma.executionTask.findFirst({
+        where: { id: dto.anchorId, deletedAt: null },
+      });
       if (!task || task.goalId !== goal.id) {
         throw new ApiError(ErrorCode.BAD_REQUEST, { message: '锚点任务不存在或不属于该目标' });
       }
@@ -138,7 +186,9 @@ export class CollaborationService {
 
     // 回复通知：通知父评论作者
     if (dto.parentId) {
-      const parent = await this.prisma.comment.findUnique({ where: { id: dto.parentId } });
+      const parent = await this.prisma.comment.findFirst({
+        where: { id: dto.parentId, deletedAt: null },
+      });
       if (parent && parent.userId !== userId) {
         await this.notificationService.notifyCommentReply({
           parentAuthorId: parent.userId,
@@ -171,7 +221,9 @@ export class CollaborationService {
   }
 
   async updateComment(id: string, dto: UpdateCommentDto, userId: string): Promise<CommentResponseDto> {
-    const comment = await this.prisma.comment.findUnique({ where: { id } });
+    const comment = await this.prisma.comment.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!comment) {
       throw new ApiError(ErrorCode.COLLABORATION_COMMENT_NOT_FOUND);
     }
@@ -181,7 +233,7 @@ export class CollaborationService {
       throw new ApiError(ErrorCode.FORBIDDEN, { message: '只能编辑自己的评论' });
     }
 
-    await this.getGoalWithMembershipCheck(comment.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(comment.goalId, userId);
 
     const updated = await this.prisma.comment.update({
       where: { id },
@@ -193,12 +245,14 @@ export class CollaborationService {
   }
 
   async removeComment(id: string, userId: string): Promise<{ success: boolean }> {
-    const comment = await this.prisma.comment.findUnique({ where: { id } });
+    const comment = await this.prisma.comment.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!comment) {
       throw new ApiError(ErrorCode.COLLABORATION_COMMENT_NOT_FOUND);
     }
 
-    const goal = await this.getGoalWithMembershipCheck(comment.goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(comment.goalId, userId);
 
     // 作者或工作区 admin/owner 可删除
     const member = await this.prisma.workspaceMember.findUnique({
@@ -209,22 +263,31 @@ export class CollaborationService {
       throw new ApiError(ErrorCode.FORBIDDEN, { message: '无权删除该评论' });
     }
 
-    // 级联删除子回复
+    // 软删除：标记 deletedAt（连同子回复）
+    const now = new Date();
     await this.prisma.$transaction([
-      this.prisma.comment.deleteMany({ where: { parentId: id } }),
-      this.prisma.comment.delete({ where: { id } }),
+      this.prisma.comment.updateMany({
+        where: { parentId: id, deletedAt: null },
+        data: { deletedAt: now },
+      }),
+      this.prisma.comment.update({
+        where: { id },
+        data: { deletedAt: now },
+      }),
     ]);
 
     return { success: true };
   }
 
   async resolveComment(id: string, userId: string): Promise<CommentResponseDto> {
-    const comment = await this.prisma.comment.findUnique({ where: { id } });
+    const comment = await this.prisma.comment.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!comment) {
       throw new ApiError(ErrorCode.COLLABORATION_COMMENT_NOT_FOUND);
     }
 
-    await this.getGoalWithMembershipCheck(comment.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(comment.goalId, userId);
 
     const updated = await this.prisma.comment.update({
       where: { id },
@@ -246,12 +309,14 @@ export class CollaborationService {
   }
 
   async reopenComment(id: string, userId: string): Promise<CommentResponseDto> {
-    const comment = await this.prisma.comment.findUnique({ where: { id } });
+    const comment = await this.prisma.comment.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!comment) {
       throw new ApiError(ErrorCode.COLLABORATION_COMMENT_NOT_FOUND);
     }
 
-    await this.getGoalWithMembershipCheck(comment.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(comment.goalId, userId);
 
     const updated = await this.prisma.comment.update({
       where: { id },
@@ -267,11 +332,13 @@ export class CollaborationService {
   // ============================================================
 
   async assignTask(taskId: string, dto: AssignTaskDto, userId: string): Promise<AssignmentResponseDto> {
-    const task = await this.prisma.executionTask.findUnique({ where: { id: taskId } });
+    const task = await this.prisma.executionTask.findFirst({
+      where: { id: taskId, deletedAt: null },
+    });
     if (!task) {
       throw new ApiError(ErrorCode.EXECUTION_TASK_NOT_FOUND);
     }
-    const goal = await this.getGoalWithMembershipCheck(task.goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(task.goalId, userId);
 
     // 校验被指派人是工作区成员
     const assigneeMember = await this.prisma.workspaceMember.findUnique({
@@ -330,11 +397,13 @@ export class CollaborationService {
   }
 
   async unassignTask(taskId: string, userId: string): Promise<{ success: boolean }> {
-    const task = await this.prisma.executionTask.findUnique({ where: { id: taskId } });
+    const task = await this.prisma.executionTask.findFirst({
+      where: { id: taskId, deletedAt: null },
+    });
     if (!task) {
       throw new ApiError(ErrorCode.EXECUTION_TASK_NOT_FOUND);
     }
-    const goal = await this.getGoalWithMembershipCheck(task.goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(task.goalId, userId);
 
     if (!task.assigneeId) {
       return { success: true };
@@ -360,14 +429,16 @@ export class CollaborationService {
   }
 
   async getAssignmentHistory(taskId: string, userId: string): Promise<AssignmentHistoryDto[]> {
-    const task = await this.prisma.executionTask.findUnique({ where: { id: taskId } });
+    const task = await this.prisma.executionTask.findFirst({
+      where: { id: taskId, deletedAt: null },
+    });
     if (!task) {
       throw new ApiError(ErrorCode.EXECUTION_TASK_NOT_FOUND);
     }
-    await this.getGoalWithMembershipCheck(task.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(task.goalId, userId);
 
     const assignments = await this.prisma.assignment.findMany({
-      where: { taskId },
+      where: { taskId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -393,7 +464,11 @@ export class CollaborationService {
   /** 查询用户在当前工作区被指派的所有任务 */
   async findMyAssignments(workspaceId: string, userId: string): Promise<AssignmentResponseDto[]> {
     const tasks = await this.prisma.executionTask.findMany({
-      where: { assigneeId: userId, goal: { workspaceId, deletedAt: null } },
+      where: {
+        assigneeId: userId,
+        deletedAt: null,
+        goal: { workspaceId, deletedAt: null },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -402,7 +477,7 @@ export class CollaborationService {
     // 取每个任务最新的指派记录
     const taskIds = tasks.map((t) => t.id);
     const assignments = await this.prisma.assignment.findMany({
-      where: { taskId: { in: taskIds }, assigneeId: userId },
+      where: { taskId: { in: taskIds }, assigneeId: userId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -435,9 +510,9 @@ export class CollaborationService {
     userId: string,
     query?: ActivityListQueryDto,
   ): Promise<ActivityEventDto[]> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
-    const where: Record<string, unknown> = { goalId: goal.id };
+    const where: Prisma.ActivityEventWhereInput = { goalId: goal.id, deletedAt: null };
     if (query?.type) where.type = query.type;
     if (query?.targetType) where.targetType = query.targetType;
 
@@ -500,26 +575,6 @@ export class CollaborationService {
   // ============================================================
   // 私有辅助
   // ============================================================
-
-  private async getGoalWithMembershipCheck(goalId: string, userId: string) {
-    const goal = await this.prisma.goal.findFirst({
-      where: { id: goalId, deletedAt: null },
-    });
-    if (!goal) {
-      throw new ApiError(ErrorCode.GOAL_NOT_FOUND);
-    }
-
-    const member = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId: goal.workspaceId, userId } },
-    });
-    if (!member) {
-      throw new ApiError(ErrorCode.FORBIDDEN, {
-        message: '你不是该目标所属工作区的成员',
-      });
-    }
-
-    return goal;
-  }
 
   private async getUserMap(userIds: string[]): Promise<Map<string, { id: string; displayName: string; avatarUrl: string | null }>> {
     if (userIds.length === 0) return new Map();

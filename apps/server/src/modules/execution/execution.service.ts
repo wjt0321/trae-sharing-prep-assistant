@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { CollaborationService } from '../collaboration/collaboration.service';
 import { NotificationService } from '../notification/notification.service';
+import { GoalPermissionService } from '../goal/goal-permission.service';
 import {
   ApiError,
   ErrorCode,
@@ -35,6 +37,7 @@ export class ExecutionService {
     private readonly prisma: PrismaService,
     private readonly collaborationService: CollaborationService,
     private readonly notificationService: NotificationService,
+    private readonly goalPermissionService: GoalPermissionService,
   ) {}
 
   // ============================================================
@@ -46,8 +49,8 @@ export class ExecutionService {
     userId: string,
     query?: { stageId?: string; status?: TaskStatusEnum },
   ): Promise<TaskResponseDto[]> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
-    const where: Record<string, unknown> = { goalId: goal.id };
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
+    const where: Prisma.ExecutionTaskWhereInput = { goalId: goal.id, deletedAt: null };
     if (query?.stageId) where.stageId = query.stageId;
     if (query?.status) where.status = query.status;
 
@@ -59,25 +62,65 @@ export class ExecutionService {
   }
 
   async findOne(id: string, userId: string): Promise<TaskResponseDto> {
-    const task = await this.prisma.executionTask.findUnique({ where: { id } });
+    const task = await this.prisma.executionTask.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!task) {
       throw new ApiError(ErrorCode.EXECUTION_TASK_NOT_FOUND);
     }
-    await this.getGoalWithMembershipCheck(task.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(task.goalId, userId);
     return this.toTaskResponse(task);
   }
 
   async getStatusHistory(taskId: string, userId: string): Promise<TaskStatusHistoryDto[]> {
-    const task = await this.prisma.executionTask.findUnique({ where: { id: taskId } });
+    const task = await this.prisma.executionTask.findFirst({
+      where: { id: taskId, deletedAt: null },
+    });
     if (!task) {
       throw new ApiError(ErrorCode.EXECUTION_TASK_NOT_FOUND);
     }
-    await this.getGoalWithMembershipCheck(task.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(task.goalId, userId);
 
     const history = await this.prisma.taskStatusHistory.findMany({
-      where: { taskId },
+      where: { taskId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
+    return history.map((h) => ({
+      id: h.id,
+      taskId: h.taskId,
+      fromStatus: h.fromStatus as TaskStatusEnum | null,
+      toStatus: h.toStatus as TaskStatusEnum,
+      note: h.note,
+      blockerNote: h.blockerNote,
+      operatorId: h.operatorId,
+      createdAt: h.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * 批量查询目标下所有任务的最近状态历史（避免前端 N+1 请求）
+   * 返回按时间倒序的扁平列表，最多 limit 条
+   */
+  async getRecentHistory(
+    goalId: string,
+    userId: string,
+    limit: number = 10,
+  ): Promise<TaskStatusHistoryDto[]> {
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
+
+    const tasks = await this.prisma.executionTask.findMany({
+      where: { goalId: goal.id, deletedAt: null },
+      select: { id: true },
+    });
+    const taskIds = tasks.map((t) => t.id);
+    if (taskIds.length === 0) return [];
+
+    const history = await this.prisma.taskStatusHistory.findMany({
+      where: { taskId: { in: taskIds }, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 50),
+    });
+
     return history.map((h) => ({
       id: h.id,
       taskId: h.taskId,
@@ -95,7 +138,7 @@ export class ExecutionService {
   // ============================================================
 
   async create(goalId: string, dto: CreateTaskDto, userId: string): Promise<TaskResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     const task = await this.prisma.executionTask.create({
       data: {
@@ -144,13 +187,15 @@ export class ExecutionService {
   }
 
   async update(id: string, dto: UpdateTaskDto, userId: string): Promise<TaskResponseDto> {
-    const task = await this.prisma.executionTask.findUnique({ where: { id } });
+    const task = await this.prisma.executionTask.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!task) {
       throw new ApiError(ErrorCode.EXECUTION_TASK_NOT_FOUND);
     }
-    await this.getGoalWithMembershipCheck(task.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(task.goalId, userId);
 
-    const data: Record<string, unknown> = {};
+    const data: Prisma.ExecutionTaskUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.stageId !== undefined) data.stageId = dto.stageId;
@@ -163,13 +208,19 @@ export class ExecutionService {
   }
 
   async remove(id: string, userId: string): Promise<{ success: boolean }> {
-    const task = await this.prisma.executionTask.findUnique({ where: { id } });
+    const task = await this.prisma.executionTask.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!task) {
       throw new ApiError(ErrorCode.EXECUTION_TASK_NOT_FOUND);
     }
-    await this.getGoalWithMembershipCheck(task.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(task.goalId, userId);
 
-    await this.prisma.executionTask.delete({ where: { id } });
+    // 软删除：标记 deletedAt，不实际删除记录
+    await this.prisma.executionTask.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
     return { success: true };
   }
 
@@ -182,11 +233,13 @@ export class ExecutionService {
     dto: UpdateTaskStatusDto,
     userId: string,
   ): Promise<TaskResponseDto> {
-    const task = await this.prisma.executionTask.findUnique({ where: { id } });
+    const task = await this.prisma.executionTask.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!task) {
       throw new ApiError(ErrorCode.EXECUTION_TASK_NOT_FOUND);
     }
-    await this.getGoalWithMembershipCheck(task.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(task.goalId, userId);
 
     const fromStatus = task.status as TaskStatusEnum;
     const toStatus = dto.status;
@@ -213,7 +266,7 @@ export class ExecutionService {
       });
     }
 
-    const updateData: Record<string, unknown> = { status: toStatus };
+    const updateData: Prisma.ExecutionTaskUpdateInput = { status: toStatus };
     if (toStatus === TaskStatusEnum.COMPLETED) {
       updateData.completedAt = new Date();
     } else if (fromStatus === TaskStatusEnum.COMPLETED) {
@@ -285,26 +338,146 @@ export class ExecutionService {
     dto: BatchUpdateStatusDto,
     userId: string,
   ): Promise<BatchUpdateResultDto> {
-    await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
-    let succeeded = 0;
+    // 批量获取所有任务（避免 N+1 查询）
+    const taskIds = dto.updates.map((u) => u.taskId);
+    const tasks = await this.prisma.executionTask.findMany({
+      where: { id: { in: taskIds }, goalId: goal.id, deletedAt: null },
+    });
+    const taskMap = new Map(tasks.map((t) => [t.id, t]));
+
+    // 前置校验所有任务的状态流转
+    const validUpdates: Array<{
+      task: (typeof tasks)[0];
+      fromStatus: TaskStatusEnum;
+      toStatus: TaskStatusEnum;
+      updateData: Prisma.ExecutionTaskUpdateInput;
+      blockerNote: string | null;
+      note: string | null;
+    }> = [];
     const failures: Array<{ taskId: string; reason: string }> = [];
 
     for (const item of dto.updates) {
-      try {
-        await this.updateStatus(item.taskId, {
-          status: item.status,
-          blockerNote: item.blockerNote,
-          note: item.note,
-        }, userId);
-        succeeded++;
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        failures.push({ taskId: item.taskId, reason });
+      const task = taskMap.get(item.taskId);
+      if (!task) {
+        failures.push({ taskId: item.taskId, reason: '任务不存在或不属于该目标' });
+        continue;
       }
+
+      const fromStatus = task.status as TaskStatusEnum;
+      const toStatus = item.status;
+
+      if (TASK_TERMINAL_STATUSES.includes(fromStatus)) {
+        failures.push({
+          taskId: item.taskId,
+          reason: `任务处于终态（${fromStatus}），不可再变更`,
+        });
+        continue;
+      }
+
+      const allowed = TASK_STATUS_TRANSITIONS[fromStatus] ?? [];
+      if (!allowed.includes(toStatus)) {
+        failures.push({
+          taskId: item.taskId,
+          reason: `不允许从 ${fromStatus} 流转到 ${toStatus}`,
+        });
+        continue;
+      }
+
+      if (toStatus === TaskStatusEnum.BLOCKED && !item.blockerNote?.trim()) {
+        failures.push({
+          taskId: item.taskId,
+          reason: '标记为受阻时必须填写阻塞原因',
+        });
+        continue;
+      }
+
+      const updateData: Prisma.ExecutionTaskUpdateInput = { status: toStatus };
+      if (toStatus === TaskStatusEnum.COMPLETED) {
+        updateData.completedAt = new Date();
+      } else if (fromStatus === TaskStatusEnum.COMPLETED) {
+        updateData.completedAt = null;
+      }
+      if (toStatus === TaskStatusEnum.BLOCKED) {
+        updateData.blockerNote = item.blockerNote;
+      } else {
+        updateData.blockerNote = null;
+      }
+
+      validUpdates.push({
+        task,
+        fromStatus,
+        toStatus,
+        updateData,
+        blockerNote: toStatus === TaskStatusEnum.BLOCKED ? item.blockerNote ?? null : null,
+        note: item.note ?? null,
+      });
     }
 
-    return { succeeded, failed: failures.length, failures };
+    // 单事务完成所有任务更新 + 状态历史写入
+    if (validUpdates.length > 0) {
+      await this.prisma.$transaction(
+        validUpdates.flatMap((u) => [
+          this.prisma.executionTask.update({
+            where: { id: u.task.id },
+            data: u.updateData,
+          }),
+          this.prisma.taskStatusHistory.create({
+            data: {
+              taskId: u.task.id,
+              fromStatus: u.fromStatus,
+              toStatus: u.toStatus,
+              note: u.note,
+              blockerNote: u.blockerNote,
+              operatorId: userId,
+            },
+          }),
+        ]),
+      );
+
+      // 事务后：记录活动流 + 发送通知（不阻断主流程）
+      const operator = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true },
+      });
+      const operatorName = operator?.displayName ?? '未知用户';
+
+      for (const u of validUpdates) {
+        await this.collaborationService.recordActivity({
+          goalId: goal.id,
+          actorId: userId,
+          type: ActivityEventTypeEnum.TASK_STATUS_CHANGED,
+          targetType: 'task',
+          targetId: u.task.id,
+          targetTitle: u.task.title,
+          detail: `${u.fromStatus} → ${u.toStatus}`,
+        });
+
+        if (u.task.assigneeId && u.task.assigneeId !== userId) {
+          await this.notificationService.notifyTaskStatusChanged({
+            assigneeId: u.task.assigneeId,
+            workspaceId: goal.workspaceId,
+            taskTitle: u.task.title,
+            taskId: u.task.id,
+            fromStatus: u.fromStatus,
+            toStatus: u.toStatus,
+            operatorName,
+            goalId: goal.id,
+          });
+        }
+      }
+
+      this.logger.log(
+        `批量状态更新: goal=${goal.id}, succeeded=${validUpdates.length}, failed=${failures.length}`,
+      );
+    }
+
+    return {
+      succeeded: validUpdates.length,
+      failed: failures.length,
+      failures,
+    };
   }
 
   // ============================================================
@@ -316,7 +489,7 @@ export class ExecutionService {
     dto: SyncTasksDto,
     userId: string,
   ): Promise<SyncTasksResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     // 读取活跃规划
     const activePlan = await this.prisma.plan.findFirst({
@@ -335,11 +508,15 @@ export class ExecutionService {
     let removed = 0;
     if (dto.replace) {
       const existing = await this.prisma.executionTask.findMany({
-        where: { goalId: goal.id },
+        where: { goalId: goal.id, deletedAt: null },
         select: { id: true },
       });
       removed = existing.length;
-      await this.prisma.executionTask.deleteMany({ where: { goalId: goal.id } });
+      // 软删除：标记 deletedAt，不实际删除
+      await this.prisma.executionTask.updateMany({
+        where: { goalId: goal.id, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
     }
 
     // 收集规划中的所有任务
@@ -350,7 +527,7 @@ export class ExecutionService {
     const existingKeys = new Set<string>();
     if (!dto.replace) {
       const existing = await this.prisma.executionTask.findMany({
-        where: { goalId: goal.id },
+        where: { goalId: goal.id, deletedAt: null },
         select: { title: true, stageId: true },
       });
       for (const t of existing) {
@@ -387,34 +564,25 @@ export class ExecutionService {
       });
     }
 
-    // 批量创建任务 + 初始状态历史
+    // 逐个创建任务 + 初始状态历史（在事务中确保 ID 一致性，避免 createMany 反查的竞态）
     await this.prisma.$transaction(async (tx) => {
-      const created = await tx.executionTask.createMany({ data: toCreate });
-      // 记录初始状态历史
-      const historyData = toCreate.map(() => ({
-        // createMany 不返回 id，这里用占位，下面单独处理
-        placeholder: true,
-      }));
-      // 由于 createMany 不返回记录，单独查询刚创建的任务补历史
-      if (created.count > 0) {
-        const fresh = await tx.executionTask.findMany({
-          where: { goalId: goal.id, status: TaskStatusEnum.PENDING },
-          orderBy: { createdAt: 'desc' },
-          take: created.count,
-          select: { id: true },
-        });
-        if (fresh.length > 0) {
-          await tx.taskStatusHistory.createMany({
-            data: fresh.map((f) => ({
-              taskId: f.id,
-              fromStatus: null,
-              toStatus: TaskStatusEnum.PENDING,
-              operatorId: userId,
-            })),
-          });
-        }
+      const createdTasks: Array<{ id: string }> = [];
+      for (const taskData of toCreate) {
+        const task = await tx.executionTask.create({ data: taskData });
+        createdTasks.push({ id: task.id });
       }
-      void historyData;
+
+      // 批量创建初始状态历史（此时已有正确的 task ID）
+      if (createdTasks.length > 0) {
+        await tx.taskStatusHistory.createMany({
+          data: createdTasks.map((t) => ({
+            taskId: t.id,
+            fromStatus: null,
+            toStatus: TaskStatusEnum.PENDING,
+            operatorId: userId,
+          })),
+        });
+      }
     });
 
     // 推进目标到执行阶段
@@ -425,7 +593,9 @@ export class ExecutionService {
       });
     }
 
-    const total = await this.prisma.executionTask.count({ where: { goalId: goal.id } });
+    const total = await this.prisma.executionTask.count({
+      where: { goalId: goal.id, deletedAt: null },
+    });
 
     this.logger.log(
       `任务同步完成: goal=${goal.id}, mode=${mode}, created=${toCreate.length}, skipped=${skipped}, removed=${removed}`,
@@ -445,10 +615,10 @@ export class ExecutionService {
   // ============================================================
 
   async getProgress(goalId: string, userId: string): Promise<GoalProgressDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     const tasks = await this.prisma.executionTask.findMany({
-      where: { goalId: goal.id },
+      where: { goalId: goal.id, deletedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
@@ -511,10 +681,10 @@ export class ExecutionService {
   // ============================================================
 
   async getNextSteps(goalId: string, userId: string): Promise<NextStepsResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     const tasks = await this.prisma.executionTask.findMany({
-      where: { goalId: goal.id },
+      where: { goalId: goal.id, deletedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
@@ -634,26 +804,6 @@ export class ExecutionService {
   // ============================================================
   // 私有辅助
   // ============================================================
-
-  private async getGoalWithMembershipCheck(goalId: string, userId: string) {
-    const goal = await this.prisma.goal.findFirst({
-      where: { id: goalId, deletedAt: null },
-    });
-    if (!goal) {
-      throw new ApiError(ErrorCode.GOAL_NOT_FOUND);
-    }
-
-    const member = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId: goal.workspaceId, userId } },
-    });
-    if (!member) {
-      throw new ApiError(ErrorCode.FORBIDDEN, {
-        message: '你不是该目标所属工作区的成员',
-      });
-    }
-
-    return goal;
-  }
 
   /** 从规划阶段中收集任务，扁平化为同步用结构 */
   private collectPlanTasks(

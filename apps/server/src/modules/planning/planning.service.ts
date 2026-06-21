@@ -5,6 +5,7 @@ import { PromptRegistryService } from '../prompt-registry/prompt-registry.servic
 import { PlanEngine } from './plan-engine';
 import { CollaborationService } from '../collaboration/collaboration.service';
 import { NotificationService } from '../notification/notification.service';
+import { GoalPermissionService } from '../goal/goal-permission.service';
 import {
   ApiError,
   ErrorCode,
@@ -27,6 +28,7 @@ export class PlanningService {
     private readonly planEngine: PlanEngine,
     private readonly collaborationService: CollaborationService,
     private readonly notificationService: NotificationService,
+    private readonly goalPermissionService: GoalPermissionService,
   ) {}
 
   // ============================================================
@@ -34,7 +36,7 @@ export class PlanningService {
   // ============================================================
 
   async findAll(goalId: string, userId: string): Promise<PlanResponseDto[]> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
     const plans = await this.prisma.plan.findMany({
       where: { goalId: goal.id },
       orderBy: { version: 'desc' },
@@ -49,12 +51,12 @@ export class PlanningService {
     if (!plan) {
       throw new ApiError(ErrorCode.NOT_FOUND, { message: '规划不存在' });
     }
-    await this.getGoalWithMembershipCheck(plan.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(plan.goalId, userId);
     return this.toPlanResponse(plan);
   }
 
   async findActive(goalId: string, userId: string): Promise<PlanResponseDto | null> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
     const plan = await this.prisma.plan.findFirst({
       where: { goalId: goal.id, isActive: true },
       orderBy: { version: 'desc' },
@@ -67,7 +69,7 @@ export class PlanningService {
   // ============================================================
 
   async create(goalId: string, dto: GeneratePlanDto, userId: string): Promise<PlanResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     // 检查是否已有活跃版本
     if (!dto.force) {
@@ -153,7 +155,7 @@ export class PlanningService {
   // ============================================================
 
   async replan(goalId: string, dto: ReplanDto, userId: string): Promise<PlanResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     // 获取当前活跃版本
     const currentPlan = await this.prisma.plan.findFirst({
@@ -272,7 +274,7 @@ export class PlanningService {
     versionB: number,
     userId: string,
   ): Promise<PlanCompareResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     const [planA, planB] = await Promise.all([
       this.prisma.plan.findFirst({
@@ -307,7 +309,7 @@ export class PlanningService {
   // ============================================================
 
   async setActive(goalId: string, version: number, userId: string): Promise<PlanResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     const targetPlan = await this.prisma.plan.findFirst({
       where: { goalId: goal.id, version },
@@ -347,27 +349,6 @@ export class PlanningService {
   // ============================================================
   // 私有辅助
   // ============================================================
-
-  private async getGoalWithMembershipCheck(goalId: string, userId: string) {
-    const goal = await this.prisma.goal.findFirst({
-      where: { id: goalId, deletedAt: null },
-    });
-    if (!goal) {
-      throw new ApiError(ErrorCode.GOAL_NOT_FOUND);
-    }
-
-    // 检查工作区成员权限
-    const member = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId: goal.workspaceId, userId } },
-    });
-    if (!member) {
-      throw new ApiError(ErrorCode.FORBIDDEN, {
-        message: '你不是该目标所属工作区的成员',
-      });
-    }
-
-    return goal;
-  }
 
   /**
    * 把 Prisma Goal 转换为 PlanEngine 需要的格式（shareDate: Date → string）

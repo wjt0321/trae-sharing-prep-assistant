@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { api, tokenStorage, setAuthErrorHandler, ApiError } from "./api";
+import { api, setAuthErrorHandler, ApiError } from "./api";
 
 interface AuthUser {
   id: string;
@@ -16,13 +16,6 @@ interface AuthUser {
   displayName: string;
   avatarUrl: string | null;
   defaultWorkspaceId: string;
-}
-
-interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-  tokenType: string;
 }
 
 interface AuthState {
@@ -52,19 +45,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const refreshUser = useCallback(async () => {
-    const token = tokenStorage.getAccess();
-    if (!token) {
-      setState({ user: null, loading: false, error: null });
-      return;
-    }
+    // Token 在 httpOnly Cookie 中，直接调用 /auth/me 检查登录状态
     try {
       const user = await api.get<AuthUser>("/auth/me");
       setState({ user, loading: false, error: null });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        tokenStorage.clear();
+        // 未登录或 token 过期，属于正常状态
+        setState({ user: null, loading: false, error: null });
+      } else {
+        setState({ user: null, loading: false, error: null });
       }
-      setState({ user: null, loading: false, error: null });
     }
   }, []);
 
@@ -76,12 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const result = await api.post<AuthUser & AuthTokens>("/auth/login", {
+    const result = await api.post<AuthUser & { accessToken: string; refreshToken: string; expiresIn: number; tokenType: string }>("/auth/login", {
       email,
       password,
     });
-    tokenStorage.setAccess(result.accessToken);
-    tokenStorage.setRefresh(result.refreshToken);
+    // Cookie 由后端 Set-Cookie 自动设置，前端无需手动存储 token
     setState({
       user: {
         id: result.id,
@@ -97,13 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(
     async (email: string, password: string, displayName: string) => {
-      const result = await api.post<AuthUser & AuthTokens>("/auth/register", {
+      const result = await api.post<AuthUser & { accessToken: string; refreshToken: string; expiresIn: number; tokenType: string }>("/auth/register", {
         email,
         password,
         displayName,
       });
-      tokenStorage.setAccess(result.accessToken);
-      tokenStorage.setRefresh(result.refreshToken);
+      // Cookie 由后端 Set-Cookie 自动设置
       setState({
         user: {
           id: result.id,
@@ -125,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // 忽略登出请求失败
     }
-    tokenStorage.clear();
+    // 后端已清除 Cookie，前端只需重置状态
     setState({ user: null, loading: false, error: null });
   }, []);
 

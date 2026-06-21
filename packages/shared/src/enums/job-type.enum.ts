@@ -11,6 +11,7 @@ export enum JobTypeEnum {
   AI_CALL = 'ai_call',
   KNOWLEDGE_INDEX = 'knowledge_index',
   CLEANUP = 'cleanup',
+  SESSION_CLEANUP = 'session_cleanup',
 }
 
 export const JOB_TYPE_LABELS: Record<JobTypeEnum, string> = {
@@ -21,4 +22,5 @@ export const JOB_TYPE_LABELS: Record<JobTypeEnum, string> = {
   [JobTypeEnum.AI_CALL]: 'AI 调用',
   [JobTypeEnum.KNOWLEDGE_INDEX]: '知识索引',
   [JobTypeEnum.CLEANUP]: '清理',
+  [JobTypeEnum.SESSION_CLEANUP]: '会话清理',
 };

@@ -1,0 +1,74 @@
+{
+  "phases": [
+    {
+      "name": "需求定义",
+      "description": "明确项目目标、范围与 MVP 边界",
+      "order": 1,
+      "tasks": [
+        { "title": "定义项目目标与成功标准", "description": "明确做到什么程度算成功", "priority": "high" },
+        { "title": "确定 MVP 范围", "description": "最小可用版本的功能边界", "priority": "high" },
+        { "title": "梳理用户故事", "description": "核心用户流程", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "设计",
+      "description": "技术方案、架构与界面设计",
+      "order": 2,
+      "tasks": [
+        { "title": "技术选型与架构设计", "description": "确定技术栈与系统架构", "priority": "high" },
+        { "title": "数据库与接口设计", "description": "数据模型与 API 设计", "priority": "high" },
+        { "title": "界面原型设计", "description": "核心页面原型", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "开发",
+      "description": "核心功能开发",
+      "order": 3,
+      "tasks": [
+        { "title": "搭建项目骨架", "description": "工程结构、基础配置", "priority": "high" },
+        { "title": "开发核心功能", "description": "按优先级实现 MVP 功能", "priority": "high" },
+        { "title": "接口联调", "description": "前后端集成", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "测试",
+      "description": "功能测试与问题修复",
+      "order": 4,
+      "tasks": [
+        { "title": "核心流程测试", "description": "主流程跑通", "priority": "high" },
+        { "title": "Bug 修复与优化", "description": "问题修复与体验优化", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "上线",
+      "description": "部署上线与后续维护",
+      "order": 5,
+      "tasks": [
+        { "title": "部署到生产环境", "description": "服务器配置与部署", "priority": "high" },
+        { "title": "上线验证", "description": "生产环境功能验证", "priority": "high" },
+        { "title": "收集反馈与迭代", "description": "用户反馈收集", "priority": "low" }
+      ]
+    }
+  ],
+  "risks": [
+    { "description": "范围蔓延导致延期", "impact": "high", "mitigation": "严格控制 MVP 边界，后续迭代" },
+    { "description": "技术难点卡住进度", "impact": "medium", "mitigation": "尽早验证关键技术，准备备选方案" },
+    { "description": "上线后无人使用", "impact": "medium", "mitigation": "尽早收集用户反馈，快速迭代" }
+  ],
+  "milestones": [
+    { "name": "需求确认", "description": "MVP 范围与目标确认" },
+    { "name": "设计完成", "description": "技术方案与原型定稿" },
+    { "name": "MVP 完成", "description": "核心功能开发完成" },
+    { "name": "成功上线", "description": "项目部署上线" }
+  ],
+  "nextActions": [
+    "明确项目的核心目标与成功标准",
+    "定义 MVP 的最小功能范围",
+    "梳理核心用户流程"
+  ],
+  "assumptions": [
+    "有基本的开发环境与工具",
+    "技术栈已确定或有明确倾向",
+    "能保证持续的开发时间投入"
+  ]
+}

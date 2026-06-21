@@ -46,7 +46,10 @@ model Session {
   id           String   @id @default(uuid())
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  refreshToken String
+  // Refresh Token 的 SHA-256 哈希（安全存储，无法反推原始 token）
+  refreshTokenHash String?
+  // 旧字段：明文 refresh token（已废弃，保留仅为向后兼容迁移，新 session 不再写入）
+  refreshToken String?
   // 设备/UA 信息
   userAgent    String?
   ipAddress    String?
@@ -55,7 +58,7 @@ model Session {
   createdAt    DateTime @default(now())
 
   @@index([userId])
-  @@index([refreshToken])
+  @@index([refreshTokenHash])
 }
 
 // ============================================================
@@ -175,6 +178,7 @@ model Goal {
   @@index([creatorId])
   @@index([scenarioType])
   @@index([currentStage])
+  @@index([deletedAt])
 }
 
 model Plan {
@@ -228,6 +232,7 @@ model ExecutionTask {
   creator      User     @relation("TaskCreator", fields: [creatorId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
 
   statusHistory TaskStatusHistory[]
   assignments   Assignment[]
@@ -237,6 +242,8 @@ model ExecutionTask {
   @@index([creatorId])
   @@index([stageId])
   @@index([assigneeId])
+  @@index([deletedAt])
+  @@index([goalId, status])
 }
 
 // 任务状态变更历史（参考 05 实施清单：记录每次状态变化的时间和操作者）
@@ -255,6 +262,7 @@ model TaskStatusHistory {
   // 操作者
   operatorId   String
   createdAt    DateTime @default(now())
+  deletedAt    DateTime?
 
   @@index([taskId])
   @@index([operatorId])
@@ -284,11 +292,13 @@ model Comment {
   resolvedById String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
 
   @@index([goalId])
   @@index([userId])
   @@index([anchorType, anchorId])
   @@index([type])
+  @@index([goalId, parentId])
 }
 
 // 任务指派历史（参考 07 实施清单：指派变更留痕）
@@ -303,6 +313,7 @@ model Assignment {
   // 指派备注
   note         String?
   createdAt    DateTime @default(now())
+  deletedAt    DateTime?
 
   @@index([taskId])
   @@index([assigneeId])
@@ -326,11 +337,13 @@ model ActivityEvent {
   // 事件详情（如状态变更的 from→to）
   detail       String?
   createdAt    DateTime @default(now())
+  deletedAt    DateTime?
 
   @@index([goalId])
   @@index([type])
   @@index([actorId])
   @@index([targetType, targetId])
+  @@index([goalId, createdAt])
 }
 
 // ============================================================
@@ -475,6 +488,7 @@ model TaskJob {
   @@index([status])
   @@index([type])
   @@index([userId])
+  @@index([createdAt])
 }
 
 // ============================================================

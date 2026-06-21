@@ -1,0 +1,74 @@
+{
+  "phases": [
+    {
+      "name": "需求分析",
+      "description": "理解赛题、明确评审标准与约束",
+      "order": 1,
+      "tasks": [
+        { "title": "研读赛题与评审标准", "description": "理解评分维度与硬性要求", "priority": "high" },
+        { "title": "竞品与往届方案调研", "description": "了解同类方案的优势与不足", "priority": "medium" },
+        { "title": "确定差异化策略", "description": "找到创新点与亮点", "priority": "high" }
+      ]
+    },
+    {
+      "name": "方案设计",
+      "description": "技术选型、架构设计与原型验证",
+      "order": 2,
+      "tasks": [
+        { "title": "确定技术方案与架构", "description": "技术栈选型与系统设计", "priority": "high" },
+        { "title": "制作原型验证核心可行性", "description": "POC 验证关键技术", "priority": "high" },
+        { "title": "规划开发里程碑", "description": "按时间节点拆分开发任务", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "开发实现",
+      "description": "核心功能开发与集成",
+      "order": 3,
+      "tasks": [
+        { "title": "开发核心功能模块", "description": "按优先级实现核心特性", "priority": "high" },
+        { "title": "集成与联调", "description": "模块集成、接口联调", "priority": "high" },
+        { "title": "UI / 交互打磨", "description": "用户体验优化", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "测试优化",
+      "description": "功能测试、性能优化与 Bug 修复",
+      "order": 4,
+      "tasks": [
+        { "title": "功能测试与 Bug 修复", "description": "核心流程跑通", "priority": "high" },
+        { "title": "性能与稳定性优化", "description": "压力测试与优化", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "提交答辩",
+      "description": "材料准备、演示视频与答辩",
+      "order": 5,
+      "tasks": [
+        { "title": "准备提交材料", "description": "文档、代码、演示", "priority": "high" },
+        { "title": "制作演示视频", "description": "核心功能演示", "priority": "high" },
+        { "title": "准备答辩材料", "description": "PPT、问答预案", "priority": "medium" }
+      ]
+    }
+  ],
+  "risks": [
+    { "description": "时间不足导致功能裁剪", "impact": "high", "mitigation": "按优先级裁剪，保证核心功能完整" },
+    { "description": "技术方案不可行", "impact": "high", "mitigation": "尽早 POC 验证，准备备选方案" },
+    { "description": "团队协作沟通成本", "impact": "medium", "mitigation": "明确分工与每日同步" }
+  ],
+  "milestones": [
+    { "name": "方案确定", "description": "技术方案与架构确认" },
+    { "name": "核心功能完成", "description": "MVP 功能开发完成" },
+    { "name": "测试通过", "description": "核心流程测试通过" },
+    { "name": "提交完成", "description": "参赛材料提交" }
+  ],
+  "nextActions": [
+    "仔细研读赛题与评审标准",
+    "调研往届优秀方案",
+    "确定你的差异化亮点"
+  ],
+  "assumptions": [
+    "参赛时间节点已明确",
+    "团队成员与分工已确定（如团队赛）",
+    "开发环境与工具已就绪"
+  ]
+}

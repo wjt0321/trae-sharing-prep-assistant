@@ -16,6 +16,7 @@ import {
   type PlanContent,
 } from '@ai-task-manager/shared';
 import { ExportTemplateGenerator } from './export-template.generator';
+import { GoalPermissionService } from '../goal/goal-permission.service';
 import type { CreateExportDto } from './dto/create-export.dto';
 import type { UpdateShareSettingsDto } from './dto/update-share-settings.dto';
 
@@ -23,14 +24,17 @@ import type { UpdateShareSettingsDto } from './dto/update-share-settings.dto';
 export class ExportService {
   private readonly logger = new Logger(ExportService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly goalPermissionService: GoalPermissionService,
+  ) {}
 
   // ============================================================
   // 创建导出
   // ============================================================
 
   async create(goalId: string, dto: CreateExportDto, userId: string): Promise<ExportResponseDto> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
 
     // 聚合上下文
     const ctx = await this.buildExportContext(goal);
@@ -61,7 +65,7 @@ export class ExportService {
   // ============================================================
 
   async findAll(goalId: string, userId: string): Promise<ExportListItemDto[]> {
-    const goal = await this.getGoalWithMembershipCheck(goalId, userId);
+    const goal = await this.goalPermissionService.getGoalWithMembershipCheck(goalId, userId);
     const records = await this.prisma.exportRecord.findMany({
       where: { goalId: goal.id },
       orderBy: { createdAt: 'desc' },
@@ -74,7 +78,7 @@ export class ExportService {
     if (!record) {
       throw new ApiError(ErrorCode.NOT_FOUND, { message: '导出记录不存在' });
     }
-    await this.getGoalWithMembershipCheck(record.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(record.goalId, userId);
     return this.toExportResponse(record);
   }
 
@@ -129,7 +133,7 @@ export class ExportService {
     if (!record) {
       throw new ApiError(ErrorCode.NOT_FOUND, { message: '导出记录不存在' });
     }
-    await this.getGoalWithMembershipCheck(record.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(record.goalId, userId);
 
     const data: Record<string, unknown> = {};
 
@@ -166,7 +170,7 @@ export class ExportService {
     if (!record) {
       throw new ApiError(ErrorCode.NOT_FOUND, { message: '导出记录不存在' });
     }
-    await this.getGoalWithMembershipCheck(record.goalId, userId);
+    await this.goalPermissionService.getGoalWithMembershipCheck(record.goalId, userId);
 
     await this.prisma.exportRecord.delete({ where: { id } });
     return { success: true };
@@ -201,9 +205,9 @@ export class ExportService {
       planVersion = activePlan.version;
     }
 
-    // 读取执行任务
+    // 读取执行任务（过滤软删除）
     const tasks = await this.prisma.executionTask.findMany({
-      where: { goalId: goal.id },
+      where: { goalId: goal.id, deletedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
@@ -247,26 +251,6 @@ export class ExportService {
         inProgressTasks,
       },
     };
-  }
-
-  private async getGoalWithMembershipCheck(goalId: string, userId: string) {
-    const goal = await this.prisma.goal.findFirst({
-      where: { id: goalId, deletedAt: null },
-    });
-    if (!goal) {
-      throw new ApiError(ErrorCode.GOAL_NOT_FOUND);
-    }
-
-    const member = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId: goal.workspaceId, userId } },
-    });
-    if (!member) {
-      throw new ApiError(ErrorCode.FORBIDDEN, {
-        message: '你不是该目标所属工作区的成员',
-      });
-    }
-
-    return goal;
   }
 
   private generateShareToken(): string {

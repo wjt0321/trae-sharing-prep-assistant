@@ -1,0 +1,65 @@
+{
+  "phases": [
+    {
+      "name": "选题定位",
+      "description": "确定内容方向、目标读者与差异化",
+      "order": 1,
+      "tasks": [
+        { "title": "确定内容方向与主题", "description": "找到有价值的选题", "priority": "high" },
+        { "title": "分析目标读者画像", "description": "了解读者需求与痛点", "priority": "medium" },
+        { "title": "确定内容形式与平台", "description": "图文 / 视频 / 音频 + 发布平台", "priority": "medium" }
+      ]
+    },
+    {
+      "name": "内容规划",
+      "description": "内容大纲、系列规划与更新节奏",
+      "order": 2,
+      "tasks": [
+        { "title": "搭建内容大纲", "description": "系列内容的结构设计", "priority": "high" },
+        { "title": "制定更新计划", "description": "发布频率与时间安排", "priority": "medium" },
+        { "title": "建立素材库", "description": "收集参考资料与案例", "priority": "low" }
+      ]
+    },
+    {
+      "name": "创作执行",
+      "description": "内容创作、编辑与质量把控",
+      "order": 3,
+      "tasks": [
+        { "title": "完成首批内容创作", "description": "先做 3-5 篇建立基调", "priority": "high" },
+        { "title": "内容审校与优化", "description": "质量把关与排版", "priority": "medium" },
+        { "title": "配图与视觉素材", "description": "提升内容可读性", "priority": "low" }
+      ]
+    },
+    {
+      "name": "发布运营",
+      "description": "发布、推广与数据复盘",
+      "order": 4,
+      "tasks": [
+        { "title": "按计划发布内容", "description": "保持更新节奏", "priority": "high" },
+        { "title": "社群与渠道推广", "description": "扩大内容触达", "priority": "medium" },
+        { "title": "数据复盘与迭代", "description": "根据数据调整策略", "priority": "medium" }
+      ]
+    }
+  ],
+  "risks": [
+    { "description": "选题同质化严重", "impact": "medium", "mitigation": "找到独特视角或垂直细分" },
+    { "description": "难以坚持更新节奏", "impact": "high", "mitigation": "建立素材库，批量创作" },
+    { "description": "内容质量不稳定", "impact": "medium", "mitigation": "建立审校流程与质量标准" }
+  ],
+  "milestones": [
+    { "name": "选题确定", "description": "内容方向与主题确认" },
+    { "name": "大纲完成", "description": "系列内容大纲定稿" },
+    { "name": "首批发布", "description": "前 3-5 篇内容发布" },
+    { "name": "稳定更新", "description": "建立可持续更新节奏" }
+  ],
+  "nextActions": [
+    "确定你想创作的内容方向",
+    "分析目标读者是谁、他们关心什么",
+    "列出 5-10 个候选选题"
+  ],
+  "assumptions": [
+    "有基本的创作工具与平台账号",
+    "能保证一定的创作时间投入",
+    "内容方向有足够的素材支撑"
+  ]
+}

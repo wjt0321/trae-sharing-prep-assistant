@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api, tokenStorage } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import {
@@ -94,10 +94,9 @@ export default function ExportsPage() {
   };
 
   const handleDownload = (id: string, title: string) => {
-    const token = tokenStorage.getAccess();
     const url = `/api/server/exports/${id}/download`;
     fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
     })
       .then((res) => res.blob())
       .then((blob) => {

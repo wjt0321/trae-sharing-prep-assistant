@@ -14,8 +14,10 @@ import { AiTaskStatusEnum, JobTypeEnum } from '@ai-task-manager/shared';
 export class TaskWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TaskWorkerService.name);
   private timer: NodeJS.Timeout | null = null;
+  private sessionCleanupTimer: NodeJS.Timeout | null = null;
   private readonly intervalMs: number;
   private readonly batchSize: number;
+  private readonly sessionCleanupIntervalMs: number;
   private isProcessing = false;
 
   constructor(
@@ -24,6 +26,11 @@ export class TaskWorkerService implements OnModuleInit, OnModuleDestroy {
   ) {
     this.intervalMs = configService.get<number>('TASK_WORKER_INTERVAL_MS', 5000);
     this.batchSize = Number(configService.get('TASK_WORKER_BATCH_SIZE', '5')) || 5;
+    // Session 清理间隔：默认 10 分钟
+    this.sessionCleanupIntervalMs = configService.get<number>(
+      'SESSION_CLEANUP_INTERVAL_MS',
+      10 * 60 * 1000,
+    );
   }
 
   onModuleInit(): void {
@@ -33,12 +40,27 @@ export class TaskWorkerService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`任务轮询失败: ${err.message}`, err.stack);
       });
     }, this.intervalMs);
+
+    // Session 清理：定期删除过期会话，防止 Session 表无限增长
+    this.sessionCleanupTimer = setInterval(() => {
+      this.cleanupExpiredSessions().catch((err) => {
+        this.logger.error(`Session 清理失败: ${err.message}`, err.stack);
+      });
+    }, this.sessionCleanupIntervalMs);
+    // 启动时立即执行一次
+    this.cleanupExpiredSessions().catch((err) => {
+      this.logger.error(`启动期 Session 清理失败: ${err.message}`, err.stack);
+    });
   }
 
   onModuleDestroy(): void {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+    }
+    if (this.sessionCleanupTimer) {
+      clearInterval(this.sessionCleanupTimer);
+      this.sessionCleanupTimer = null;
     }
     this.logger.log('任务 Worker 已停止');
   }
@@ -153,8 +175,35 @@ export class TaskWorkerService implements OnModuleInit, OnModuleDestroy {
       case JobTypeEnum.CLEANUP:
         this.logger.log(`[占位] ${type} 任务，参数: ${JSON.stringify(params)}`);
         return { status: 'mocked' };
+      case JobTypeEnum.SESSION_CLEANUP: {
+        const deleted = await this.cleanupExpiredSessions();
+        return { status: 'ok', deleted };
+      }
       default:
         throw new Error(`未知的任务类型: ${type}`);
+    }
+  }
+
+  /**
+   * 清理过期 Session（expiresAt < now）
+   * 定期执行，防止 Session 表无限增长
+   * @returns 删除的记录数
+   */
+  private async cleanupExpiredSessions(): Promise<number> {
+    try {
+      const now = new Date();
+      const result = await this.prisma.session.deleteMany({
+        where: { expiresAt: { lt: now } },
+      });
+      if (result.count > 0) {
+        this.logger.log(`Session 清理完成：删除 ${result.count} 条过期会话`);
+      }
+      return result.count;
+    } catch (error) {
+      this.logger.error(
+        `Session 清理失败: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 0;
     }
   }
 }

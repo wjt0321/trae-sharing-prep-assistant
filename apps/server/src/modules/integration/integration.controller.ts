@@ -5,11 +5,14 @@ import {
   Delete,
   Body,
   Param,
+  UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
 import { IntegrationService } from './integration.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('integrations')
 export class IntegrationController {
   constructor(private readonly integrationService: IntegrationService) {}
