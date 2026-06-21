@@ -6,8 +6,10 @@
  */
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { buildRealScenarioDataset } from '../src/seed/real-scenario-data';
 
 const prisma = new PrismaClient();
+const realDataset = buildRealScenarioDataset();
 
 async function main() {
   console.log('开始写入种子数据...');
@@ -239,6 +241,269 @@ async function main() {
     }
   }
   console.log(`已创建 ${promptTemplates.length} 个内置提示词模板`);
+
+  // 8. 创建真实业务场景数据
+  for (const scenarioUser of realDataset.users) {
+    await prisma.user.upsert({
+      where: { email: scenarioUser.email },
+      update: {
+        displayName: scenarioUser.displayName,
+        avatarUrl: scenarioUser.avatarUrl,
+      },
+      create: {
+        id: scenarioUser.id,
+        email: scenarioUser.email,
+        passwordHash,
+        displayName: scenarioUser.displayName,
+        avatarUrl: scenarioUser.avatarUrl,
+      },
+    });
+  }
+  console.log(`已创建 ${realDataset.users.length} 个真实业务用户`);
+
+  for (const scenarioWorkspace of realDataset.workspaces) {
+    await prisma.workspace.upsert({
+      where: { id: scenarioWorkspace.id },
+      update: {
+        name: scenarioWorkspace.name,
+        type: scenarioWorkspace.type,
+        description: scenarioWorkspace.description,
+        ownerId: scenarioWorkspace.ownerId,
+      },
+      create: scenarioWorkspace,
+    });
+  }
+  console.log(`已创建 ${realDataset.workspaces.length} 个真实业务工作区`);
+
+  for (const scenarioUser of realDataset.users) {
+    await prisma.user.update({
+      where: { id: scenarioUser.id },
+      data: { defaultWorkspaceId: scenarioUser.defaultWorkspaceId },
+    });
+  }
+
+  for (const scenarioMember of realDataset.workspaceMembers) {
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: scenarioMember.workspaceId,
+          userId: scenarioMember.userId,
+        },
+      },
+      update: {
+        role: scenarioMember.role,
+      },
+      create: scenarioMember,
+    });
+  }
+  console.log(`已创建 ${realDataset.workspaceMembers.length} 条真实业务成员关系`);
+
+  for (const scenarioGoal of realDataset.goals) {
+    await prisma.goal.upsert({
+      where: { id: scenarioGoal.id },
+      update: {
+        workspaceId: scenarioGoal.workspaceId,
+        creatorId: scenarioGoal.creatorId,
+        topic: scenarioGoal.topic,
+        title: scenarioGoal.title,
+        scenarioType: scenarioGoal.scenarioType,
+        audience: scenarioGoal.audience,
+        duration: scenarioGoal.duration,
+        shareDate: scenarioGoal.shareDate,
+        goalType: scenarioGoal.goalType,
+        preparedness: scenarioGoal.preparedness,
+        timeConstraint: scenarioGoal.timeConstraint,
+        resourceConstraint: scenarioGoal.resourceConstraint,
+        priority: scenarioGoal.priority,
+        successCriteria: scenarioGoal.successCriteria,
+        currentStage: scenarioGoal.currentStage,
+        isCollaborative: scenarioGoal.isCollaborative,
+        sceneTags: scenarioGoal.sceneTags,
+      },
+      create: scenarioGoal,
+    });
+  }
+  console.log(`已创建 ${realDataset.goals.length} 个真实业务目标`);
+
+  for (const scenarioPlan of realDataset.plans) {
+    await prisma.plan.upsert({
+      where: { id: scenarioPlan.id },
+      update: {
+        goalId: scenarioPlan.goalId,
+        version: scenarioPlan.version,
+        isActive: scenarioPlan.isActive,
+        source: scenarioPlan.source,
+        changeReason: scenarioPlan.changeReason,
+        aiPromptLog: scenarioPlan.aiPromptLog,
+        content: scenarioPlan.content,
+      },
+      create: scenarioPlan,
+    });
+  }
+
+  for (const scenarioTask of realDataset.tasks) {
+    await prisma.executionTask.upsert({
+      where: { id: scenarioTask.id },
+      update: {
+        goalId: scenarioTask.goalId,
+        stageId: scenarioTask.stageId,
+        stageName: scenarioTask.stageName,
+        title: scenarioTask.title,
+        description: scenarioTask.description,
+        status: scenarioTask.status,
+        sortOrder: scenarioTask.sortOrder,
+        dueDate: scenarioTask.dueDate,
+        completedAt: scenarioTask.completedAt,
+        blockerNote: scenarioTask.blockerNote,
+        assigneeId: scenarioTask.assigneeId,
+        creatorId: scenarioTask.creatorId,
+      },
+      create: scenarioTask,
+    });
+  }
+
+  for (const history of realDataset.taskStatusHistories) {
+    await prisma.taskStatusHistory.upsert({
+      where: { id: history.id },
+      update: {
+        taskId: history.taskId,
+        fromStatus: history.fromStatus,
+        toStatus: history.toStatus,
+        note: history.note,
+        blockerNote: history.blockerNote,
+        operatorId: history.operatorId,
+        createdAt: history.createdAt,
+      },
+      create: history,
+    });
+  }
+
+  for (const comment of realDataset.comments) {
+    await prisma.comment.upsert({
+      where: { id: comment.id },
+      update: {
+        goalId: comment.goalId,
+        userId: comment.userId,
+        content: comment.content,
+        parentId: comment.parentId,
+        anchorType: comment.anchorType,
+        anchorId: comment.anchorId,
+        type: comment.type,
+        mentions: comment.mentions,
+        resolvedAt: comment.resolvedAt,
+        resolvedById: comment.resolvedById,
+      },
+      create: comment,
+    });
+  }
+
+  for (const assignment of realDataset.assignments) {
+    await prisma.assignment.upsert({
+      where: { id: assignment.id },
+      update: {
+        taskId: assignment.taskId,
+        assigneeId: assignment.assigneeId,
+        assignedById: assignment.assignedById,
+        note: assignment.note,
+        createdAt: assignment.createdAt,
+      },
+      create: assignment,
+    });
+  }
+
+  for (const event of realDataset.activityEvents) {
+    await prisma.activityEvent.upsert({
+      where: { id: event.id },
+      update: {
+        goalId: event.goalId,
+        type: event.type,
+        actorId: event.actorId,
+        targetType: event.targetType,
+        targetId: event.targetId,
+        targetTitle: event.targetTitle,
+        detail: event.detail,
+        createdAt: event.createdAt,
+      },
+      create: event,
+    });
+  }
+
+  for (const template of realDataset.templates) {
+    await prisma.template.upsert({
+      where: { id: template.id },
+      update: {
+        workspaceId: template.workspaceId,
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        scenarioType: template.scenarioType,
+        content: template.content,
+        isBuiltIn: template.isBuiltIn ?? false,
+        usageCount: template.usageCount ?? 0,
+        createdBy: template.createdBy,
+      },
+      create: {
+        ...template,
+        isBuiltIn: template.isBuiltIn ?? false,
+        usageCount: template.usageCount ?? 0,
+      },
+    });
+  }
+
+  for (const asset of realDataset.assets) {
+    await prisma.knowledgeAsset.upsert({
+      where: { id: asset.id },
+      update: {
+        workspaceId: asset.workspaceId,
+        title: asset.title,
+        type: asset.type,
+        content: asset.content,
+        tags: asset.tags,
+        sourceGoalId: asset.sourceGoalId,
+        creatorId: asset.creatorId,
+      },
+      create: asset,
+    });
+  }
+
+  for (const exportRecord of realDataset.exports) {
+    await prisma.exportRecord.upsert({
+      where: { id: exportRecord.id },
+      update: {
+        goalId: exportRecord.goalId,
+        type: exportRecord.type,
+        format: exportRecord.format,
+        title: exportRecord.title,
+        content: exportRecord.content,
+        filePath: exportRecord.filePath,
+        shareToken: exportRecord.shareToken,
+        shareExpiresAt: exportRecord.shareExpiresAt,
+        allowDownload: exportRecord.allowDownload,
+        status: exportRecord.status,
+        errorMessage: exportRecord.errorMessage,
+        creatorId: exportRecord.creatorId,
+      },
+      create: exportRecord,
+    });
+  }
+
+  for (const notification of realDataset.notifications) {
+    await prisma.notification.upsert({
+      where: { id: notification.id },
+      update: {
+        userId: notification.userId,
+        workspaceId: notification.workspaceId,
+        type: notification.type,
+        title: notification.title,
+        content: notification.content,
+        targetType: notification.targetType,
+        targetId: notification.targetId,
+        readAt: notification.readAt,
+      },
+      create: notification,
+    });
+  }
+  console.log('已写入真实业务场景数据');
 
   console.log('种子数据写入完成');
 }

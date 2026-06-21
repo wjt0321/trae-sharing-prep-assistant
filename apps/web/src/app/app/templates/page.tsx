@@ -38,11 +38,12 @@ export default function TemplatesPage() {
   const loadTemplates = useCallback(async () => {
     if (!currentWorkspace) return;
     try {
-      const params = new URLSearchParams({ workspaceId: currentWorkspace.id });
+      const params = new URLSearchParams();
       if (categoryFilter) params.set("category", categoryFilter);
       if (keyword) params.set("keyword", keyword);
+      const query = params.toString();
       const data = await api.get<TemplateListItemDto[]>(
-        `/workspaces/${currentWorkspace.id}/templates?${params.toString()}`,
+        `/workspaces/${currentWorkspace.id}/templates${query ? `?${query}` : ""}`,
       );
       setTemplates(data);
     } catch {

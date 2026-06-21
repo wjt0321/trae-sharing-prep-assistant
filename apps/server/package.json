@@ -25,6 +25,7 @@
     "db:seed": "prisma db seed",
     "db:setup": "prisma generate && prisma migrate dev && prisma db seed",
     "db:studio": "prisma studio",
+    "functional:check": "node scripts/functional-check.mjs",
     "backup": "node scripts/backup.mjs",
     "security-scan": "node scripts/security-scan.mjs"
   },
