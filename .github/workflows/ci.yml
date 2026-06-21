@@ -32,6 +32,9 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @ai-task-manager/shared build
 
+      - name: Generate Prisma client
+        run: pnpm --filter @ai-task-manager/server exec prisma generate
+
       - name: Typecheck
         run: pnpm run typecheck
 
@@ -70,6 +73,9 @@ jobs:
 
       - name: Build shared package
         run: pnpm --filter @ai-task-manager/shared build
+
+      - name: Generate Prisma client
+        run: pnpm --filter @ai-task-manager/server exec prisma generate
 
       - name: Run server tests
         run: pnpm --filter @ai-task-manager/server test
