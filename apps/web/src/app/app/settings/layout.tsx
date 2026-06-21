@@ -9,12 +9,12 @@ import { type ReactNode } from "react";
 // ============================================================
 
 const navItems = [
-  { href: "/app/settings/profile", label: "个人资料", icon: "👤" },
-  { href: "/app/settings/security", label: "密码与安全", icon: "🔒" },
-  { href: "/app/settings/workspace", label: "工作区成员", icon: "👥" },
-  { href: "/app/settings/notifications", label: "通知偏好", icon: "🔔" },
-  { href: "/app/settings/ai-config", label: "AI 网关", icon: "🤖" },
-  { href: "/app/settings/prompts", label: "提示词模板", icon: "📝" },
+  { href: "/app/settings/profile", label: "个人资料", icon: "/icons/ico-profile.png" },
+  { href: "/app/settings/security", label: "密码与安全", icon: "/icons/ico-security.png" },
+  { href: "/app/settings/workspace", label: "工作区成员", icon: "/icons/ico-workspace-members.png" },
+  { href: "/app/settings/notifications", label: "通知偏好", icon: "/icons/ico-notification.png" },
+  { href: "/app/settings/ai-config", label: "AI 网关", icon: "/icons/ico-ai-gateway.png" },
+  { href: "/app/settings/prompts", label: "提示词模板", icon: "/icons/ico-prompts.png" },
 ];
 
 export default function SettingsLayout({
@@ -42,9 +42,12 @@ export default function SettingsLayout({
                     : "text-secondary hover:bg-muted hover:text-ink"
                 }`}
               >
-                <span className="text-base" aria-hidden>
-                  {item.icon}
-                </span>
+                <img
+                  src={item.icon}
+                  alt=""
+                  aria-hidden
+                  className="h-4 w-4 shrink-0 object-contain"
+                />
                 {item.label}
               </Link>
             );

@@ -128,7 +128,12 @@ export default function NotificationsPage() {
         <div className="py-16 text-center text-sm text-danger">{error}</div>
       ) : notifications.length === 0 ? (
         <div className="py-16 text-center">
-          <div className="mb-3 text-4xl">🔔</div>
+          <img
+            src="/icons/ico-empty-notification.png"
+            alt=""
+            aria-hidden
+            className="mx-auto mb-3 h-16 w-16 object-contain"
+          />
           <p className="text-sm text-tertiary">
             {filter === "unread" ? "没有未读通知" : "暂无通知"}
           </p>

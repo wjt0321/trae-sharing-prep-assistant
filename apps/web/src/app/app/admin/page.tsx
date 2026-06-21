@@ -46,9 +46,9 @@ import type {
 type TabKey = "overview" | "business" | "audit";
 
 const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
-  { key: "overview", label: "系统概览", icon: "📊" },
-  { key: "business", label: "业务指标", icon: "📈" },
-  { key: "audit", label: "审计日志", icon: "🔍" },
+  { key: "overview", label: "系统概览", icon: "/icons/ico-admin-overview.png" },
+  { key: "business", label: "业务指标", icon: "/icons/ico-admin-business.png" },
+  { key: "audit", label: "审计日志", icon: "/icons/ico-admin-audit.png" },
 ];
 
 export default function AdminPage() {
@@ -73,7 +73,12 @@ export default function AdminPage() {
                 : "border-transparent text-secondary hover:text-ink"
             }`}
           >
-            <span aria-hidden>{t.icon}</span>
+            <img
+              src={t.icon}
+              alt=""
+              aria-hidden
+              className="h-4 w-4 object-contain"
+            />
             {t.label}
           </button>
         ))}
@@ -856,7 +861,7 @@ function AuditTab() {
         <CardContent>
           {logs.length === 0 ? (
             <Empty
-              icon="🔍"
+              icon="/icons/ico-empty-default.png"
               title="暂无审计日志"
               description="尝试调整筛选条件或更换时间范围"
             />

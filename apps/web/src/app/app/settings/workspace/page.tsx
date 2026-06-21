@@ -112,7 +112,7 @@ export default function WorkspaceSettingsPage() {
     return (
       <div>
         <PageHeader title="工作区成员" />
-        <Empty title="请先选择一个工作区" icon="🏠" />
+        <Empty title="请先选择一个工作区" icon="/icons/ico-empty-workspace.png" />
       </div>
     );
   }
